@@ -1,0 +1,2026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="author" content="duffyjp — https://github.com/duffyjp">
+<meta name="description" content="Toad Feast: a one-file 3D toad survival game. Gobble flies with your tongue before hunger eats you.">
+<title>Toad Feast</title>
+<!--
+  Toad Feast — a single-file 3D toad survival game
+  by duffyjp · https://github.com/duffyjp/toad-game
+  MIT licensed (see the LICENSE file in the repository)
+
+  Everything apart from the Three.js library (MIT, loaded from unpkg.com) lives in this
+  one file: the world, the toad, the flies, the artwork and all the sound are generated
+  by code at load time. No build step, no asset files.
+-->
+<style>
+  :root{
+    --ink:#eef6ea; --dim:#a9bda6; --amber:#e8a53a; --red:#e0553f; --good:#7fd45f;
+    --panel:rgba(10,20,14,.72); --edge:rgba(200,230,190,.18);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b1410;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+  #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .layer{position:fixed;inset:0;pointer-events:none;z-index:5}
+  /* ---------- HUD ---------- */
+  #hud{opacity:0;transition:opacity .35s}
+  #hud.on{opacity:1}
+  #topleft{position:absolute;left:16px;top:14px;width:270px}
+  #barwrap{height:16px;border-radius:9px;background:rgba(0,0,0,.45);border:1px solid var(--edge);overflow:hidden}
+  #bar{height:100%;width:80%;border-radius:9px;background:linear-gradient(90deg,#57b84a,#8fd96a);transition:width .12s linear,background .3s}
+  #bar.warn{background:linear-gradient(90deg,#c8871f,#eab64c)}
+  #bar.crit{background:linear-gradient(90deg,#a5301c,#e4674a)}
+  #hlabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 4px}
+  #score{position:absolute;right:20px;top:12px;text-align:right}
+  #score .n{font-size:44px;font-weight:700;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+  #score .s{font-size:12px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
+  #timer{font-size:13px;color:var(--dim);margin-top:6px}
+  #vignette{position:fixed;inset:0;z-index:4;pointer-events:none;opacity:0;
+    background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(150,20,10,.85) 100%)}
+  #popups{position:absolute;inset:0}
+  .pop{position:absolute;font-size:20px;font-weight:700;color:#c9f59a;text-shadow:0 2px 8px rgba(0,0,0,.7);
+    animation:rise 1.1s ease-out forwards}
+  .pop.combo{color:#ffd66b}
+  @keyframes rise{from{opacity:0;transform:translateY(6px) scale(.9)}
+    20%{opacity:1;transform:translateY(0) scale(1.05)}to{opacity:0;transform:translateY(-46px) scale(1)}}
+  #hint{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(680px,92vw);
+    background:var(--panel);border:1px solid var(--edge);border-radius:12px;padding:12px 16px;font-size:13px;
+    line-height:1.55;color:#dcecd8;backdrop-filter:blur(6px);transition:opacity .7s;text-align:center}
+  #hint b{color:#fff}
+  #hint.hide{opacity:0}
+  #status{position:absolute;left:50%;top:16%;transform:translateX(-50%);font-size:14px;letter-spacing:.16em;
+    text-transform:uppercase;color:#f0b0a0;opacity:0;transition:opacity .4s}
+  /* ---------- full-screen panels ---------- */
+  .panel{position:fixed;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 40%,rgba(16,32,22,.82),rgba(4,9,7,.95));pointer-events:auto}
+  .panel.off{display:none}
+  .card{max-width:560px;padding:30px 34px;border:1px solid var(--edge);border-radius:16px;background:rgba(8,18,13,.72);
+    box-shadow:0 20px 60px rgba(0,0,0,.55)}
+  h1{margin:0 0 6px;font-size:46px;letter-spacing:.02em;color:#bfe89f;text-shadow:0 3px 0 rgba(0,0,0,.35)}
+  .pitch{margin:0 0 18px;color:#c3d7bd;font-size:15px}
+  .big{font-size:17px;color:#fff}
+  .kbd{display:inline-block;padding:2px 7px;border-radius:5px;border:1px solid var(--edge);background:rgba(255,255,255,.07);
+    font-size:12px;font-family:inherit}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+  .btn{pointer-events:auto;cursor:pointer;padding:9px 16px;border-radius:9px;border:1px solid var(--edge);
+    background:#2e6b3a;color:#fff;font-size:14px;font-family:inherit}
+  .btn:hover{background:#3a8347}
+  .small{font-size:12px;color:var(--dim);margin-top:14px;line-height:1.6}
+  .keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:18px 0 2px;
+    text-align:left;font-size:12.5px;color:#cfdcc9}
+  .keys>div{display:flex;gap:9px;align-items:baseline}
+  .keys .kbd{flex:0 0 auto;min-width:64px;text-align:center}
+  .keys .wide{grid-column:1/-1;color:var(--dim);margin-top:4px}
+  .credit{margin-top:18px;font-size:11.5px;color:var(--dim);letter-spacing:.02em;line-height:1.6}
+  .credit a{color:#c3dcb9;text-decoration:none;border-bottom:1px solid rgba(200,230,190,.28)}
+  .credit a:hover{color:#fff}
+  .stats{display:flex;gap:26px;margin:14px 0 4px}
+  .stat .v{font-size:34px;font-weight:700}
+  .stat .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  input[type=range]{width:160px;pointer-events:auto}
+  #fallback{display:none;position:fixed;inset:0;z-index:20;background:#0b1410;color:#e8e8e8;
+    align-items:center;justify-content:center;text-align:center;padding:30px;font-size:15px;line-height:1.6}
+  /* ---------- touch ---------- */
+  #touch{display:none}
+  #touch.on{display:block}
+  #stick{position:absolute;left:22px;bottom:22px;width:130px;height:130px;border-radius:50%;
+    border:1px solid var(--edge);background:rgba(0,0,0,.3);pointer-events:auto}
+  #nub{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;
+    background:rgba(220,240,210,.35)}
+  .tbtn{position:absolute;right:22px;width:78px;height:78px;border-radius:50%;border:1px solid var(--edge);
+    background:rgba(30,60,36,.55);color:#fff;font-size:13px;pointer-events:auto}
+  #bt1{bottom:34px}#bt2{bottom:124px}#bt3{bottom:214px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="vignette"></div>
+
+<div id="hud" class="layer">
+  <div id="topleft">
+    <div id="hlabel">Hunger</div>
+    <div id="barwrap"><div id="bar"></div></div>
+    <div id="status"></div>
+  </div>
+  <div id="score"><div class="n" id="fc">0</div><div class="s">flies eaten</div><div id="timer">0.0s &nbsp;·&nbsp; best <span id="bh">0</span></div></div>
+  <div id="popups"></div>
+  <div id="hint"></div>
+</div>
+
+<div id="touch" class="layer">
+  <div id="stick"><div id="nub"></div></div>
+  <button class="tbtn" id="bt1">HOP</button>
+  <button class="tbtn" id="bt3">LEAP</button>
+  <button class="tbtn" id="bt2">TONGUE</button>
+</div>
+
+<div class="panel" id="startPanel">
+  <div class="card">
+    <h1>Toad Feast</h1>
+    <p class="pitch">You are a toad in a jungle clearing. Gobble flies with your tongue before hunger eats you.</p>
+    <div class="big" id="startCta">Click anywhere to start &nbsp;<span style="color:#a9bda6">(or press Enter)</span></div>
+    <div class="keys" id="keysCard">
+      <div><span class="kbd">W A S D</span><span>move through the clearing</span></div>
+      <div><span class="kbd">Space</span><span>hop</span></div>
+      <div><span class="kbd">Shift</span><span>big forward leap</span></div>
+      <div><span class="kbd">Left click</span><span>tongue where you look</span></div>
+      <div><span class="kbd">E / J</span><span>tongue straight ahead</span></div>
+      <div><span class="kbd">Mouse</span><span>orbit the camera</span></div>
+      <div><span class="kbd">Scroll</span><span>zoom in / out</span></div>
+      <div><span class="kbd">C</span><span>croak</span></div>
+      <div><span class="kbd">P / Esc</span><span>pause</span></div>
+      <div><span class="kbd">M</span><span>mute &nbsp;·&nbsp; volume in pause</span></div>
+      <div><span class="kbd">R</span><span>restart the run</span></div>
+      <div><span class="kbd">H</span><span>show these controls</span></div>
+      <div class="wide">Gamepad: left stick move &nbsp;·&nbsp; A hop &nbsp;·&nbsp; B leap &nbsp;·&nbsp; RT / X tongue &nbsp;·&nbsp; Start pause.</div>
+    </div>
+    <div class="small">Best run: <b id="bestStart">0</b> flies.</div>
+    <div class="credit">Toad Feast by <a href="https://github.com/duffyjp" target="_blank" rel="noopener">duffyjp</a>
+      &nbsp;·&nbsp; <a href="https://github.com/duffyjp/toad-game" target="_blank" rel="noopener">github.com/duffyjp/toad-game</a>
+      &nbsp;·&nbsp; MIT licensed</div>
+  </div>
+</div>
+
+<div class="panel off" id="pausePanel">
+  <div class="card">
+    <h1 style="font-size:32px">Paused</h1>
+    <p class="pitch">Hunger is frozen while you are away.</p>
+    <div class="row">
+      <button class="btn" id="resumeBtn">Resume</button>
+      <button class="btn" id="muteBtn">Mute: off</button>
+      <span>Volume</span><input type="range" id="vol" min="0" max="100" value="70">
+    </div>
+    <div class="keys" id="pauseKeys"></div>
+    <div class="small">Esc or P resumes. R restarts the run.</div>
+    <div class="credit">Toad Feast by <a href="https://github.com/duffyjp" target="_blank" rel="noopener">duffyjp</a>
+      &nbsp;·&nbsp; <a href="https://github.com/duffyjp/toad-game" target="_blank" rel="noopener">github.com/duffyjp/toad-game</a></div>
+  </div>
+</div>
+
+<div class="panel off" id="overPanel">
+  <div class="card">
+    <h1 style="font-size:36px;color:#e78a72">The toad starved</h1>
+    <div class="stats">
+      <div class="stat"><div class="v" id="ovScore">0</div><div class="k">flies eaten</div></div>
+      <div class="stat"><div class="v" id="ovBest">0</div><div class="k">best run</div></div>
+      <div class="stat"><div class="v" id="ovTime">0s</div><div class="k">survived</div></div>
+    </div>
+    <div class="big">Press <span class="kbd">R</span> or click to play again</div>
+    <div class="row"><button class="btn" id="againBtn">Play again</button></div>
+    <div class="credit">Toad Feast by <a href="https://github.com/duffyjp" target="_blank" rel="noopener">duffyjp</a>
+      &nbsp;·&nbsp; <a href="https://github.com/duffyjp/toad-game" target="_blank" rel="noopener">github.com/duffyjp/toad-game</a></div>
+  </div>
+</div>
+
+<div id="fallback"><div><b>Could not load the 3D library.</b><br>
+  Toad Feast needs Three.js from unpkg.com. Check your network connection and reload.</div></div>
+
+<script type="module">
+'use strict';
+
+/* ============================================================
+ * LOAD THREE (single CDN import, graceful fallback)
+ * ============================================================ */
+let THREE;
+try {
+  THREE = await import('https://unpkg.com/three@0.160.0/build/three.module.js');
+} catch (err) {
+  document.getElementById('fallback').style.display = 'flex';
+  throw err;
+}
+
+/* ============================================================
+ * CONFIG  — every tuning number lives here
+ * ============================================================ */
+const CONFIG = {
+  world: {
+    size: 120, segs: 120, fenceR: 52, fencePush: 12, fogDensity: 0.019,
+    grassCount: 9000, treeMin: 42, treeMax: 66, fernCount: 90, mushCount: 44,
+    rockCount: 34, logCount: 12, plantCount: 5, perimeter: 130
+  },
+  toad: {
+    speed: 4.5, accel: 18, turnRate: 12, hopVel: 6.3, gravity: 17.5, radius: 0.5,
+    swimMult: 0.55,
+    leapVel: 9.8, leapPush: 11, leapCool: 1.0, leapSteer: 0.1
+    // leap: big forward lunge (Shift). leapSteer is how much of the normal
+    // acceleration you keep while flying, so the momentum carries but you can still bias it
+  },
+  tongue: {
+    maxLength: 5.5, grabRadius: 2.6, out: 0.11, in: 0.15, cooldown: 0.24,
+    mouthY: 0.85, mouthFwd: 0.95,          // the tongue leaves the mouth, not the body centre
+    maxSnap: 1.25, maxTongueYaw: 0.38, maxTonguePitch: 0.45,
+    autoAimCone: 0.75                      // radians: flies inside this cone of the level shot get snapped onto (0 = no assist)
+  },
+  fly: {
+    active: 32, max: 44, respawnMin: 15, respawnMax: 30,
+    attractR: 9, startleR: 2.6, hoverSpeed: 1.7, dartSpeed: 3.6,
+    minAlt: 0.45, maxAlt: 3.1
+  },
+  hunger: {
+    start: 80, max: 100, base: 3.2, moveMult: 1.18,
+    idleMult: 0.72, hopCost: 1.6, leapCost: 3.4, flyValue: 14,
+    comboWindow: 2.5, comboBonus: 3.5, warn: 40, critical: 15,
+    criticalPulse: 1.25
+  },
+  camera: {
+    minDist: 4, maxDist: 14, defaultDist: 8.6, pitch: 0.34,
+    pitchMin: -0.05, pitchMax: 1.2, lerp: 8, heightPad: 0.9, sway: 0.03
+  },
+  sun: { dir: [0.55, 0.62, 0.38], shadowSpan: 26, shadowMap: 2048 },
+  loop: { fixed: 1 / 60, maxFrameDelta: 0.05, maxSteps: 4 },
+  storage: { best: 'toad-feast-best-v1' }
+};
+
+/* ============================================================
+ * UTILITIES — seeded noise, maths, canvas textures
+ * ============================================================ */
+const C = CONFIG;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function mulberry(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const rnd = mulberry(20261104);
+const rr = (a, b) => a + rnd() * (b - a);
+const hash2 = (x, y) => {
+  let n = Math.imul(x, 374761393) + Math.imul(y, 668265263) + 1442695041;
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+};
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  return lerp(lerp(hash2(xi, yi), hash2(xi + 1, yi), u),
+              lerp(hash2(xi, yi + 1), hash2(xi + 1, yi + 1), u), v);
+}
+function fbm(x, y, oct = 4) {
+  let s = 0, amp = 0.5, f = 1;
+  for (let i = 0; i < oct; i++) { s += amp * vnoise(x * f, y * f); f *= 2.07; amp *= 0.5; }
+  return s;
+}
+function canvasTex(size, painter, opts) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  painter(cv.getContext('2d'), size);
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  if (opts) Object.assign(t, opts);
+  return t;
+}
+function radialTex(inner, outer, size) {
+  return canvasTex(size || 128, (g, s) => {
+    const gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    gr.addColorStop(0, inner); gr.addColorStop(1, outer);
+    g.fillStyle = gr; g.fillRect(0, 0, s, s);
+  }, { colorSpace: THREE.NoColorSpace });
+}
+const uTime = { value: 0 };
+function addWind(mat, amp, speed, lift) {
+  const base = lift || 0;
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = uTime;
+    sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n#ifdef USE_INSTANCING\n' +
+      'float ph = instanceMatrix[3][0]*0.37 + instanceMatrix[3][2]*0.53;\n' +
+      'float sw = sin(uTime*' + speed.toFixed(2) + '+ph+0.4);\n' +
+      'float hh = clamp(position.y+' + base.toFixed(2) + ',0.0,4.0);\n' +
+      'transformed.x += sw*' + amp.toFixed(3) + '*hh;\n' +
+      'transformed.z += sw*' + (amp * 0.45).toFixed(3) + '*hh;\n#endif');
+  };
+  mat.customProgramCacheKey = () => 'wind' + amp + '_' + speed + '_' + base;
+  return mat;
+}
+/* merge a list of same-attribute geometries by hand (no BufferGeometryUtils import) */
+function mergeGeos(list) {
+  const pos = [], nor = [], uv = [], idx = [];
+  let offset = 0;
+  for (const g of list) {
+    const p = g.attributes.position, n = g.attributes.normal, u = g.attributes.uv, ix = g.index;
+    for (let i = 0; i < p.count; i++) {
+      pos.push(p.getX(i), p.getY(i), p.getZ(i));
+      if (n) nor.push(n.getX(i), n.getY(i), n.getZ(i));
+      if (u) uv.push(u.getX(i), u.getY(i));
+    }
+    if (ix) for (let i = 0; i < ix.count; i++) idx.push(ix.getX(i) + offset);
+    else for (let i = 0; i < p.count; i++) idx.push(i + offset);
+    offset += p.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  if (nor.length) out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  if (uv.length) out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  out.setIndex(idx);
+  return out;
+}
+/* disc mesh with radial rings so the water can wobble across its whole surface */
+function discGeo(r, rings, segs) {
+  const pos = [], nor = [], uv = [], idx = [];
+  pos.push(0, 0, 0); nor.push(0, 1, 0); uv.push(0.5, 0.5);
+  for (let a = 0; a <= rings; a++) {
+    const rr2 = r * (a / rings);
+    for (let s = 0; s <= segs; s++) {
+      const t = (s / segs) * Math.PI * 2;
+      pos.push(Math.cos(t) * rr2, 0, Math.sin(t) * rr2);
+      nor.push(0, 1, 0); uv.push(0.5 + Math.cos(t) * 0.5 * (a / rings), 0.5 + Math.sin(t) * 0.5 * (a / rings));
+    }
+  }
+  for (let a = 0; a < rings; a++) {
+    for (let s = 0; s < segs; s++) {
+      const o = 1 + a * (segs + 1), q = 1 + (a + 1) * (segs + 1);
+      if (a === 0) { idx.push(o + s, q + s, q + s + 1); }
+      else idx.push(o + s, q + s, q + s + 1, o + s, q + s + 1, o + s + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+/* ============================================================
+ * RENDERER / SCENE
+ * ============================================================ */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const SKY_HORIZON = new THREE.Color(0xbcd3c0);
+const SKY_TOP = new THREE.Color(0x4f7fa8);
+scene.fog = new THREE.FogExp2(0x8fae94, C.world.fogDensity);
+const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 900);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ---------- lights: warm key + cool fill + hemisphere bounce ---------- */
+const sunDir = new THREE.Vector3(C.sun.dir[0], C.sun.dir[1], C.sun.dir[2]).normalize();
+const sun = new THREE.DirectionalLight(0xffe4b8, 2.5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(C.sun.shadowMap, C.sun.shadowMap);
+const sc = sun.shadow.camera;
+sc.left = sc.right = sc.top = sc.bottom = 0;
+const half = C.sun.shadowSpan / 2;
+sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half;
+sc.near = 1; sc.far = 90;
+sc.updateProjectionMatrix();
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.035;
+scene.add(sun, sun.target);
+const fill = new THREE.DirectionalLight(0x7f9fd8, 0.55);
+fill.position.set(-sunDir.x * 40, 22, -sunDir.z * 40);
+scene.add(fill);
+scene.add(new THREE.HemisphereLight(0xbcd8ea, 0x3c5a2c, 0.75));
+
+/* ---------- sky dome, sun disc, drifting clouds ---------- */
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(420, 24, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { top: { value: SKY_TOP }, hor: { value: SKY_HORIZON }, sd: { value: sunDir.clone() } },
+    vertexShader: 'varying vec3 vD;void main(){vD=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+    fragmentShader: 'uniform vec3 top,hor;uniform vec3 sd;varying vec3 vD;' +
+      'void main(){vec3 d=normalize(vD);float h=clamp(d.y*1.35,0.0,1.0);' +
+      'vec3 col=mix(hor,top,pow(h,0.65));' +
+      'float s=pow(max(dot(d,sd),0.0),180.0);float glow=pow(max(dot(d,sd),0.0),7.0)*0.28;' +
+      'col+=vec3(1.0,0.86,0.62)*(s+glow);gl_FragColor=vec4(col,1.0);}'
+  })
+);
+sky.frustumCulled = false;
+scene.add(sky);
+const glowTex = radialTex('rgba(255,244,214,1)', 'rgba(255,220,150,0)', 128);
+const sunDisc = new THREE.Mesh(new THREE.PlaneGeometry(46, 46),
+  new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+sunDisc.position.copy(sunDir).multiplyScalar(320);
+scene.add(sunDisc);
+const cloudTex = canvasTex(256, (g, s) => {
+  g.clearRect(0, 0, s, s);
+  for (let i = 0; i < 46; i++) {
+    const x = rr(0.15, 0.85) * s, y = rr(0.3, 0.7) * s, r = rr(14, 46);
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, 'rgba(255,255,255,0.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 6.284); g.fill();
+  }
+}, { colorSpace: THREE.SRGBColorSpace });
+const clouds = [];
+for (let i = 0; i < 7; i++) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(rr(70, 150), rr(40, 90)),
+    new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: rr(0.35, 0.6), depthWrite: false, fog: false }));
+  m.position.set(rr(-260, 260), rr(70, 120), rr(-260, 260));
+  m.rotation.x = -Math.PI / 2; m.rotation.z = rr(0, 6.28);
+  m.userData.spd = rr(0.6, 1.9);
+  clouds.push(m); scene.add(m);
+}
+
+/* ============================================================
+ * WORLD — terrain, water, foliage, ambient life
+ * ============================================================ */
+const PONDS = [
+  { x: -15, z: 11, r: 9.5, depth: 1.7 },
+  { x: 17, z: -19, r: 7.2, depth: 1.4 },
+  { x: 4, z: 27, r: 5.6, depth: 1.15 }
+];
+function baseH(x, z) {
+  let h = fbm(x * 0.034 + 11.3, z * 0.034 - 7.1, 4) * 5.4 + fbm(x * 0.135 - 3.7, z * 0.135 + 5.2, 3) * 0.85;
+  return h - 2.1;
+}
+for (const p of PONDS) p.waterY = baseH(p.x, p.z) - p.depth * 0.5;
+function terrainH(x, z) {
+  let h = baseH(x, z);
+  for (const p of PONDS) {
+    const d = Math.hypot(x - p.x, z - p.z);
+    if (d < p.r) h -= p.depth * (1 - smoothstep(p.r * 0.28, p.r, d));
+  }
+  return h;
+}
+function pondAt(x, z) {
+  for (const p of PONDS) { const d = Math.hypot(x - p.x, z - p.z); if (d < p.r * 0.98) return p; }
+  return null;
+}
+function mudAmount(x, z) {
+  let m = 0;
+  for (const p of PONDS) {
+    const d = Math.hypot(x - p.x, z - p.z);
+    m = Math.max(m, 1 - smoothstep(p.r * 0.55, p.r * 1.22, d));
+  }
+  return m;
+}
+
+/* ---------- terrain mesh with vertex-coloured grass / mud ---------- */
+const groundGeo = new THREE.PlaneGeometry(C.world.size, C.world.size, C.world.segs, C.world.segs);
+{
+  const pos = groundGeo.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  const tmp = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);          // plane local; z becomes world height
+    const z = -y;
+    const h = terrainH(x, z);
+    pos.setZ(i, h);
+    const patch = fbm(x * 0.32 + 5, z * 0.32 - 9, 2);
+    const wide = fbm(x * 0.085 - 21, z * 0.085 + 14, 2);
+    const mud = mudAmount(x, z);
+    let r = 0.14 + patch * 0.09 + wide * 0.05;
+    let g = 0.30 + patch * 0.20 + wide * 0.14;
+    let b = 0.10 + patch * 0.05;
+    if (h < -0.55) { g -= 0.05; b += 0.03; }          // shaded hollows
+    if (mud > 0) {
+      r = lerp(r, 0.29 + wide * 0.05, mud); g = lerp(g, 0.205 + wide * 0.03, mud); b = lerp(b, 0.135, mud);
+    }
+    tmp.setRGB(clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1));
+    col[i * 3] = tmp.r; col[i * 3 + 1] = tmp.g; col[i * 3 + 2] = tmp.b;
+  }
+  groundGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  groundGeo.computeVertexNormals();
+}
+const ground = new THREE.Mesh(groundGeo,
+  new THREE.MeshLambertMaterial({ vertexColors: true, dithering: true }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+/* ---------- water: wobbling surface + scrolling sheen ---------- */
+const sheenTex = canvasTex(256, (g, s) => {
+  g.fillStyle = '#000'; g.fillRect(0, 0, s, s);
+  for (let i = 0; i < 34; i++) {
+    g.save(); g.translate(rr(0, s), rr(0, s)); g.rotate(rr(0, 6.28));
+    const gr = g.createLinearGradient(0, -8, 0, 8);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(-rr(40, 110), -6, rr(80, 220), 12); g.restore();
+  }
+}, { colorSpace: THREE.SRGBColorSpace });
+const waters = [];
+for (const p of PONDS) {
+  const g = discGeo(p.r * 1.02, 7, 30);
+  const w = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+    color: 0x2f5a55, roughness: 0.1, metalness: 0.45, transparent: true, opacity: 0.78
+  }));
+  w.position.set(p.x, p.waterY, p.z);
+  w.userData.base = g.attributes.position.array.slice();
+  w.userData.pond = p;
+  scene.add(w);
+  const sg = discGeo(p.r * 0.98, 1, 20);
+  const sh = new THREE.Mesh(sg,
+    new THREE.MeshBasicMaterial({ map: sheenTex, transparent: true, opacity: 0.22,
+      blending: THREE.AdditiveBlending, depthWrite: false }));
+  sh.material.map.repeat.set(1.6, 1.6);
+  sh.position.set(p.x, p.waterY + 0.055, p.z);
+  w.userData.sheen = sh;
+  scene.add(sh);
+  waters.push(w);
+}
+function wobbleWater(t) {
+  for (const w of waters) {
+    const a = w.geometry.attributes.position, base = w.userData.base;
+    for (let i = 0; i < a.count; i++) {
+      const x = base[i * 3], z = base[i * 3 + 2];
+      a.setY(i, Math.sin(t * 1.6 + x * 0.8 + z * 0.4) * 0.035 + Math.cos(t * 1.1 + z * 0.9) * 0.03);
+    }
+    a.needsUpdate = true;
+    w.geometry.computeVertexNormals();
+    const m = w.userData.sheen.material.map;
+    m.offset.x = t * 0.012; m.offset.y = Math.sin(t * 0.2) * 0.05;
+  }
+}
+
+/* ---------- instanced tall grass ---------- */
+function bladeGeo() {
+  const g = new THREE.BufferGeometry();
+  const ys = [0, 0.34, 0.68, 1], ws = [0.055, 0.045, 0.028, 0.001];
+  const pos = [], col = [], idx = [];
+  for (let i = 0; i < 4; i++) {
+    const y = ys[i] * 0.85, w = ws[i];
+    const c = [0.10 + i * 0.05, 0.26 + i * 0.16, 0.09 + i * 0.03];
+    pos.push(-w, y, 0, w, y, 0); col.push(...c, ...c);
+    if (i < 3) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+const dummy = new THREE.Object3D();
+function scatter(count, test, place) {
+  let made = 0, guard = 0;
+  while (made < count && guard++ < count * 30) {
+    const x = rr(-C.world.size / 2 + 2, C.world.size / 2 - 2);
+    const z = rr(-C.world.size / 2 + 2, C.world.size / 2 - 2);
+    if (!test(x, z)) continue;
+    place(x, z, terrainH(x, z), made);
+    made++;
+  }
+  return made;
+}
+const openLand = (x, z) => {
+  const d = Math.hypot(x, z);
+  if (d > C.world.fenceR - 1 || mudAmount(x, z) > 0.55 || pondAt(x, z)) return false;
+  return true;
+};
+const grassMat = addWind(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 0.16, 1.6);
+{
+  const n = C.world.grassCount;
+  const gm = new THREE.InstancedMesh(bladeGeo(), grassMat, n);
+  let i = 0;
+  scatter(n, openLand, (x, z, h) => {
+    dummy.position.set(x, h - 0.02, z);
+    dummy.rotation.set(rr(-0.1, 0.1), rr(0, 6.283), rr(-0.1, 0.1));
+    dummy.scale.set(rr(0.7, 1.4), rr(0.7, 1.7), 1);
+    dummy.updateMatrix(); gm.setMatrixAt(i++, dummy.matrix);
+  });
+  gm.count = i; gm.castShadow = false; gm.receiveShadow = false;
+  gm.frustumCulled = false;
+  scene.add(gm);
+}
+
+/* ---------- leaf / fern canvas textures (alpha cutout) ---------- */
+function leafPaint(g, s, leaves, hueA, hueB, wide) {
+  g.clearRect(0, 0, s, s);
+  for (let i = 0; i < leaves; i++) {
+    const a = (i / leaves) * 6.283 + rr(-0.25, 0.25) - Math.PI / 2;
+    const len = s * rr(0.30, 0.44), wdt = len * wide;
+    g.save(); g.translate(s / 2, s * 0.55); g.rotate(a);
+    const gr = g.createLinearGradient(0, 0, 0, -len);
+    gr.addColorStop(0, 'hsl(' + hueA + ',42%,20%)');
+    gr.addColorStop(0.6, 'hsl(' + ((hueA + hueB) / 2) + ',46%,32%)');
+    gr.addColorStop(1, 'hsl(' + hueB + ',44%,42%)');
+    g.fillStyle = gr;
+    g.beginPath(); g.moveTo(0, 0);
+    g.bezierCurveTo(wdt, -len * 0.3, wdt * 0.75, -len * 0.78, 0, -len);
+    g.bezierCurveTo(-wdt * 0.75, -len * 0.78, -wdt, -len * 0.3, 0, 0);
+    g.fill();
+    g.strokeStyle = 'rgba(215,235,190,0.22)'; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(0, -2); g.lineTo(0, -len + 4); g.stroke();
+    g.lineWidth = 1;
+    for (let v = 1; v < 7; v++) {
+      const t = v / 7, y = -len * t, xw = Math.sin(t * 3.1) * wdt * 0.85;
+      g.beginPath(); g.moveTo(0, y); g.lineTo(xw, y - len * 0.1); g.stroke();
+      g.beginPath(); g.moveTo(0, y); g.lineTo(-xw, y - len * 0.1); g.stroke();
+    }
+    g.restore();
+  }
+}
+const leafTexA = canvasTex(256, (g, s) => leafPaint(g, s, 5, 96, 120, 0.42), { colorSpace: THREE.SRGBColorSpace });
+const leafTexB = canvasTex(256, (g, s) => leafPaint(g, s, 7, 88, 132, 0.26), { colorSpace: THREE.SRGBColorSpace });
+const fernTex = canvasTex(256, (g, s) => leafPaint(g, s, 9, 100, 128, 0.16), { colorSpace: THREE.SRGBColorSpace });
+const plantMatA = new THREE.MeshLambertMaterial({ map: leafTexA, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide });
+const plantMatB = new THREE.MeshLambertMaterial({ map: leafTexB, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide });
+const fernMat = new THREE.MeshLambertMaterial({ map: fernTex, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide });
+
+/* crossed-quad geometry (3 quads fanned around Y), merged by hand */
+function crossedGeo() {
+  const parts = [];
+  for (let i = 0; i < 3; i++) {
+    const q = new THREE.PlaneGeometry(1, 1, 1, 1);
+    q.translate(0, 0.5, 0); q.rotateY(i * Math.PI / 3);
+    parts.push(q);
+  }
+  return mergeGeos(parts);
+}
+const crossed = crossedGeo();
+
+/* ---------- ferns ---------- */
+{
+  const fm = new THREE.InstancedMesh(crossed, fernMat, C.world.fernCount);
+  let i = 0;
+  scatter(C.world.fernCount, (x, z) => openLand(x, z) || (mudAmount(x, z) > 0.4 && !pondAt(x, z)), (x, z, h) => {
+    dummy.position.set(x, h - 0.05, z);
+    dummy.rotation.set(0, rr(0, 6.283), 0);
+    const s = rr(0.8, 1.7); dummy.scale.set(s, s * rr(0.9, 1.3), s);
+    dummy.updateMatrix(); fm.setMatrixAt(i++, dummy.matrix);
+  });
+  fm.count = i; fm.castShadow = true; fm.frustumCulled = false;
+  scene.add(fm);
+}
+
+/* ---------- large jungle plants ---------- */
+{
+  const pg = crossed;
+  const im = new THREE.InstancedMesh(pg, plantMatA, C.world.plantCount);
+  let i = 0;
+  scatter(C.world.plantCount, openLand, (x, z, h) => {
+    dummy.position.set(x, h - 0.1, z);
+    dummy.rotation.set(0, rr(0, 6.283), 0);
+    const s = rr(4.4, 7.2); dummy.scale.set(s, s * 0.9, s);
+    dummy.updateMatrix(); im.setMatrixAt(i++, dummy.matrix);
+  });
+  im.count = i; im.frustumCulled = false; scene.add(im);
+}
+
+/* ---------- dense perimeter jungle = the soft fence ---------- */
+{
+  const pm = new THREE.InstancedMesh(crossed, plantMatB, C.world.perimeter);
+  let i = 0;
+  for (let k = 0; k < C.world.perimeter; k++) {
+    const a = (k / C.world.perimeter) * 6.283 + rr(-0.02, 0.02);
+    const rad = C.world.fenceR + rr(1.5, 7.5);
+    const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+    dummy.position.set(x, terrainH(x, z) - 0.2, z);
+    dummy.rotation.set(0, rr(0, 6.283), 0);
+    const s = rr(6, 11); dummy.scale.set(s, s, s);
+    dummy.updateMatrix(); pm.setMatrixAt(i++, dummy.matrix);
+  }
+  pm.count = i; pm.frustumCulled = false; scene.add(pm);
+  /* second darker ring for depth */
+  const pm2 = new THREE.InstancedMesh(crossed, plantMatB, 90);
+  for (let k = 0; k < 90; k++) {
+    const a = rr(0, 6.283), rad = C.world.fenceR + rr(9, 20);
+    const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+    dummy.position.set(x, terrainH(x, z) - 0.2, z);
+    dummy.rotation.set(0, rr(0, 6.283), 0);
+    const s = rr(8, 14); dummy.scale.set(s, s, s);
+    dummy.updateMatrix(); pm2.setMatrixAt(k, dummy.matrix);
+  }
+  pm2.frustumCulled = false; scene.add(pm2);
+}
+
+/* ---------- trees: instanced trunks + 3 foliage cones, wind-swayed ---------- */
+{
+  const n = Math.round(rr(C.world.treeMin, C.world.treeMax));
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.34, 1, 7), 
+    new THREE.MeshLambertMaterial({ color: 0x5a4531 }), n);
+  const cone = new THREE.ConeGeometry(1, 1.7, 8);
+  const folMat = addWind(new THREE.MeshLambertMaterial({ color: 0xffffff }), 0.055, 0.9);
+  const layers = [
+    new THREE.InstancedMesh(cone, folMat, n),
+    new THREE.InstancedMesh(cone, folMat, n),
+    new THREE.InstancedMesh(cone, folMat, n)
+  ];
+  const col = new THREE.Color();
+  let i = 0;
+  scatter(n, (x, z) => Math.hypot(x, z) > 9 && Math.hypot(x, z) < C.world.fenceR + 6 && !pondAt(x, z),
+    (x, z, h) => {
+      const hh = rr(4.5, 9.5), wid = rr(0.8, 1.5), hue = rr(0.30, 0.46);
+      dummy.position.set(x, h + hh / 2 - 0.2, z);
+      dummy.rotation.set(rr(-0.05, 0.05), rr(0, 6.283), rr(-0.05, 0.05));
+      dummy.scale.set(wid * rr(0.8, 1.1), hh, wid * rr(0.8, 1.1));
+      dummy.updateMatrix(); trunk.setMatrixAt(i, dummy.matrix);
+      const baseY = h + hh * 0.62;
+      for (let l = 0; l < 3; l++) {
+        const s = wid * (1.9 - l * 0.45);
+        dummy.position.set(x + rr(-0.3, 0.3), baseY + l * hh * 0.19, z + rr(-0.3, 0.3));
+        dummy.rotation.set(0, rr(0, 6.283), 0);
+        dummy.scale.set(s, (hh * 0.42) * rr(0.85, 1.15), s);
+        dummy.updateMatrix(); layers[l].setMatrixAt(i, dummy.matrix);
+        col.setHSL(hue + l * 0.02, 0.44, 0.20 + l * 0.045 + rr(-0.02, 0.02));
+        layers[l].setColorAt(i, col);
+      }
+      i++;
+    });
+  trunk.count = i; trunk.castShadow = true; trunk.receiveShadow = true;
+  trunk.frustumCulled = false; scene.add(trunk);
+  for (const l of layers) {
+    l.count = i; l.castShadow = true; l.frustumCulled = false; scene.add(l);
+    if (l.instanceColor) l.instanceColor.needsUpdate = true;
+  }
+}
+
+/* ---------- rocks, logs, mushrooms ---------- */
+{
+  const rockGeo = new THREE.IcosahedronGeometry(1, 1);
+  {
+    const p = rockGeo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const n = 1 + vnoise(p.getX(i) * 2.2, p.getZ(i) * 2.2 + i * 0.01) * 0.45;
+      p.setXYZ(i, p.getX(i) * n, p.getY(i) * n * 0.7, p.getZ(i) * n);
+    }
+    rockGeo.computeVertexNormals();
+  }
+  const rocks = new THREE.InstancedMesh(rockGeo, new THREE.MeshStandardMaterial({ color: 0x7d7f78, roughness: 0.9 }), C.world.rockCount);
+  let i = 0;
+  scatter(C.world.rockCount, (x, z) => Math.hypot(x, z) < C.world.fenceR + 4, (x, z, h) => {
+    const s = rr(0.3, 1.3);
+    dummy.position.set(x, h + s * 0.25, z);
+    dummy.rotation.set(rr(0, 6.283), rr(0, 6.283), rr(0, 6.283));
+    dummy.scale.set(s, s * rr(0.6, 1), s * rr(0.8, 1.2));
+    dummy.updateMatrix(); rocks.setMatrixAt(i++, dummy.matrix);
+  });
+  rocks.count = i; rocks.castShadow = true; rocks.receiveShadow = true; rocks.frustumCulled = false;
+  scene.add(rocks);
+
+  const logs = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.34, 0.4, 1, 9),
+    new THREE.MeshLambertMaterial({ color: 0x6b5236 }), C.world.logCount);
+  i = 0;
+  scatter(C.world.logCount, openLand, (x, z, h) => {
+    const L = rr(2.4, 5.2);
+    dummy.position.set(x, h + 0.3, z);
+    dummy.rotation.set(0, rr(0, 6.283), Math.PI / 2 + rr(-0.06, 0.06));
+    dummy.scale.set(rr(0.7, 1.15), L, rr(0.7, 1.15));
+    dummy.updateMatrix(); logs.setMatrixAt(i++, dummy.matrix);
+  });
+  logs.count = i; logs.castShadow = true; logs.receiveShadow = true; logs.frustumCulled = false;
+  scene.add(logs);
+
+  const capMat = addWind(new THREE.MeshLambertMaterial({ color: 0xffffff }), 0.02, 1.2);
+  const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 6, 0, 6.283, 0, 1.35), capMat, C.world.mushCount);
+  const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.1, 1, 6),
+    new THREE.MeshLambertMaterial({ color: 0xe8e2cf }), C.world.mushCount);
+  const mc = new THREE.Color();
+  i = 0;
+  scatter(C.world.mushCount, (x, z) => !pondAt(x, z) && Math.hypot(x, z) < C.world.fenceR, (x, z, h) => {
+    const s = rr(0.13, 0.34);
+    dummy.position.set(x, h + s * 0.55, z); dummy.rotation.set(0, rr(0, 6.283), 0);
+    dummy.scale.set(s * 1.7, s * 1.1, s * 1.7);
+    dummy.updateMatrix(); caps.setMatrixAt(i, dummy.matrix);
+    mc.setHSL(rr(0.02, 0.11), rr(0.4, 0.7), rr(0.35, 0.6)); caps.setColorAt(i, mc);
+    dummy.position.set(x, h + s * 0.3, z);
+    dummy.scale.set(s, s * 1.9, s);
+    dummy.updateMatrix(); stems.setMatrixAt(i, dummy.matrix);
+    i++;
+  });
+  caps.count = stems.count = i; caps.frustumCulled = stems.frustumCulled = false;
+  caps.castShadow = stems.castShadow = true;
+  scene.add(caps, stems);
+}
+
+/* ---------- pollen motes + fireflies ---------- */
+const moteTex = radialTex('rgba(255,255,235,1)', 'rgba(255,240,190,0)', 64);
+const motes = (() => {
+  const n = 300, pos = new Float32Array(n * 3), cs = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    pos[i * 3] = rr(-40, 40); pos[i * 3 + 1] = rr(0.3, 9); pos[i * 3 + 2] = rr(-40, 40);
+    cs[i * 3] = 1; cs[i * 3 + 1] = 0.95; cs[i * 3 + 2] = 0.7;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(cs, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.14, map: moteTex, transparent: true,
+    opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true, sizeAttenuation: true }));
+  p.frustumCulled = false; scene.add(p);
+  return { p, pos, n };
+})();
+const fireflies = (() => {
+  const n = 90, pos = new Float32Array(n * 3), cs = new Float32Array(n * 3), ph = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = rr(0, 6.283), rad = rr(C.world.fenceR - 9, C.world.fenceR + 12);
+    pos[i * 3] = Math.cos(a) * rad; pos[i * 3 + 1] = rr(0.6, 4.5); pos[i * 3 + 2] = Math.sin(a) * rad;
+    ph[i] = rr(0, 6.283);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(cs, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.5, map: moteTex, transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true, sizeAttenuation: true }));
+  p.frustumCulled = false; scene.add(p);
+  return { p, pos, cs, ph, n };
+})();
+
+/* ---------- pooled particle bursts (splash / dust) ---------- */
+const PART = (() => {
+  const n = 220;
+  const pos = new Float32Array(n * 3), cs = new Float32Array(n * 3), bc = new Float32Array(n * 3);
+  const vel = new Float32Array(n * 3), life = new Float32Array(n);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(cs, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.26, map: moteTex, transparent: true,
+    opacity: 0.9, depthWrite: false, vertexColors: true, sizeAttenuation: true }));
+  p.frustumCulled = false; scene.add(p);
+  let head = 0;
+  return {
+    burst(x, y, z, count, col, spd, up) {
+      for (let k = 0; k < count; k++) {
+        head = (head + 1) % n;
+        const i = head;
+        pos[i * 3] = x + rr(-0.12, 0.12); pos[i * 3 + 1] = y + 0.05; pos[i * 3 + 2] = z + rr(-0.12, 0.12);
+        const a = rr(0, 6.283), r = rr(0.3, 1) * spd;
+        vel[i * 3] = Math.cos(a) * r; vel[i * 3 + 1] = rr(0.4, 1) * up; vel[i * 3 + 2] = Math.sin(a) * r;
+        bc[i * 3] = col[0]; bc[i * 3 + 1] = col[1]; bc[i * 3 + 2] = col[2];
+        cs[i * 3] = col[0]; cs[i * 3 + 1] = col[1]; cs[i * 3 + 2] = col[2];
+        life[i] = 1;
+      }
+    },
+    step(dt) {
+      for (let i = 0; i < n; i++) {
+        if (life[i] <= 0) continue;
+        life[i] -= dt * 1.7;
+        if (life[i] <= 0) { cs[i * 3] = cs[i * 3 + 1] = cs[i * 3 + 2] = 0; continue; }
+        vel[i * 3 + 1] -= 9 * dt;
+        pos[i * 3] += vel[i * 3] * dt;
+        pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
+        pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
+        const l = life[i] * life[i];
+        cs[i * 3] = bc[i * 3] * l; cs[i * 3 + 1] = bc[i * 3 + 1] * l; cs[i * 3 + 2] = bc[i * 3 + 2] * l;
+      }
+      g.attributes.position.needsUpdate = true;
+      g.attributes.color.needsUpdate = true;
+    }
+  };
+})();
+
+/* ============================================================
+ * TOAD — built from primitives with procedural skin
+ * ============================================================ */
+/* toad skin: warty warm-brown back, pale underside — no green anywhere */
+const skinTex = canvasTex(256, (g, s) => {
+  g.fillStyle = '#7d5c39'; g.fillRect(0, 0, s, s);
+  for (let i = 0; i < 280; i++) {
+    const x = rr(0, s), y = rr(0, s), r = rr(3, 17);
+    g.fillStyle = 'hsla(' + rr(18, 38) + ',' + rr(26, 52) + '%,' + rr(13, 38) + '%,' + rr(0.25, 0.6) + ')';
+    g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
+  }
+  for (let i = 0; i < 70; i++) {                    // darker saddle blotches
+    const x = rr(0, s), y = rr(0, s), r = rr(8, 26);
+    g.fillStyle = 'hsla(' + rr(22, 34) + ',40%,' + rr(9, 16) + '%,' + rr(0.15, 0.35) + ')';
+    g.beginPath(); g.ellipse(x, y, r, r * rr(0.6, 0.9), rr(0, 3.14), 0, 6.283); g.fill();
+  }
+  for (let i = 0; i < 120; i++) {                   // warty highlights
+    g.fillStyle = 'rgba(245,224,182,' + rr(0.06, 0.22) + ')';
+    g.beginPath(); g.arc(rr(0, s), rr(0, s), rr(1, 4.5), 0, 6.283); g.fill();
+  }
+});
+const bellyTex = canvasTex(256, (g, s) => {
+  g.fillStyle = '#d9c39c'; g.fillRect(0, 0, s, s);
+  for (let i = 0; i < 200; i++) {
+    const x = rr(0, s), y = rr(0, s), r = rr(4, 20);
+    g.fillStyle = 'hsla(' + rr(28, 44) + ',' + rr(22, 40) + '%,' + rr(52, 76) + '%,' + rr(0.15, 0.45) + ')';
+    g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
+  }
+  for (let i = 0; i < 60; i++) {                    // grey-flecked throat speckles
+    g.fillStyle = 'rgba(96,76,54,' + rr(0.05, 0.2) + ')';
+    g.beginPath(); g.arc(rr(0, s), rr(0, s), rr(1.5, 6), 0, 6.283); g.fill();
+  }
+});
+const bumpTex = canvasTex(256, (g, s) => {
+  g.fillStyle = '#808080'; g.fillRect(0, 0, s, s);
+  for (let i = 0; i < 500; i++) {
+    const x = rr(0, s), y = rr(0, s), r = rr(2, 9), v = Math.round(rr(110, 200));
+    g.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+    g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
+  }
+}, { colorSpace: THREE.NoColorSpace });
+
+const skinMat = new THREE.MeshPhysicalMaterial({
+  map: skinTex, bumpMap: bumpTex, bumpScale: 0.035, roughness: 0.5,
+  metalness: 0, clearcoat: 0.4, clearcoatRoughness: 0.55, color: 0xf3e3c8
+});
+const skinDark = new THREE.MeshPhysicalMaterial({      // belly, jaw, throat: pale underside
+  map: bellyTex, bumpMap: bumpTex, bumpScale: 0.02, roughness: 0.62, color: 0xffffff, clearcoat: 0.2
+});
+const skinLimb = new THREE.MeshPhysicalMaterial({      // legs: same warty brown, a touch duller
+  map: skinTex, bumpMap: bumpTex, bumpScale: 0.03, roughness: 0.58, color: 0xd9bd93, clearcoat: 0.25
+});
+const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xf3f2e2, roughness: 0.25 });
+const eyeDark = new THREE.MeshStandardMaterial({ color: 0x14110d, roughness: 0.15, metalness: 0.1 });
+
+const toad = new THREE.Group();
+const toadBody = new THREE.Group();          // squash / stretch pivot
+toad.add(toadBody);
+function part(geo, mat, x, y, z, sx, sy, sz, parent) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z); m.scale.set(sx, sy, sz);
+  m.castShadow = true; m.receiveShadow = true;
+  (parent || toadBody).add(m); return m;
+}
+const ballGeo = new THREE.SphereGeometry(1, 20, 14);
+const bodyMesh = part(ballGeo, skinMat, 0, 0.62, -0.05, 0.80, 0.62, 0.95);
+const belly = part(ballGeo, skinDark, 0, 0.45, 0.05, 0.76, 0.42, 0.90);
+belly.position.y = 0.42;
+const head = part(ballGeo, skinMat, 0, 0.92, 0.62, 0.60, 0.42, 0.55);
+const jaw = part(ballGeo, skinDark, 0, 0.80, 0.78, 0.46, 0.20, 0.30);
+const throat = part(ballGeo, skinDark, 0, 0.62, 0.60, 0.44, 0.28, 0.44);
+const eyeR = 0.215;
+const eyeGeo = new THREE.SphereGeometry(eyeR, 18, 12);
+const pupGeo = new THREE.SphereGeometry(0.1, 12, 10);
+const eyes = [], eyePivots = [];
+for (const sx of [-1, 1]) {
+  /* eyeball seated on the head's upper-front surface so it bulges out and reads clearly */
+  const e = part(eyeGeo, eyeWhite, sx * 0.33, 1.24, 0.76, 1, 1, 1);
+  /* pupil rides ON the eyeball: a child of it, domed just proud of the front surface,
+     so it can never drift off the white and it blinks/squashes together with the eye */
+  const pv = new THREE.Group();
+  pv.rotation.set(-0.32, 0, 0);                // default gaze: up and forward
+  e.add(pv);
+  const p = new THREE.Mesh(pupGeo, eyeDark);
+  p.position.set(0, 0, eyeR - 0.03);
+  p.scale.set(1.15, 0.6, 0.45);                // wide, flat toad pupil
+  p.castShadow = false;
+  pv.add(p);
+  eyes.push(e); eyePivots.push(pv);
+}
+/* legs: thigh + shin + foot with three stubby toes */
+const legGeo = new THREE.CapsuleGeometry(0.13, 0.34, 3, 8);
+const shinGeo = new THREE.CapsuleGeometry(0.11, 0.28, 3, 8);
+const footGeo = new THREE.SphereGeometry(0.17, 10, 8);
+const toeGeo = new THREE.CapsuleGeometry(0.045, 0.14, 2, 6);
+const legs = [];
+function makeLeg(sx, front) {
+  const g = new THREE.Group();
+  const hipY = front ? 0.42 : 0.52;
+  g.position.set(sx * 0.58, hipY, front ? 0.44 : -0.42);
+  const thigh = new THREE.Mesh(legGeo, skinLimb);
+  thigh.scale.set(front ? 0.85 : 1.25, front ? 0.9 : 1.35, front ? 0.85 : 1.15);
+  thigh.position.set(sx * 0.10, -0.22, front ? 0 : -0.14);
+  thigh.rotation.z = sx * 0.45; thigh.rotation.x = front ? 0.25 : -0.55;
+  thigh.castShadow = true; g.add(thigh);
+  const shin = new THREE.Mesh(shinGeo, skinLimb);
+  shin.position.set(sx * 0.22, -0.42, front ? 0.08 : 0.18);
+  shin.rotation.z = sx * 0.18; shin.rotation.x = front ? -0.15 : 0.75;
+  shin.castShadow = true; g.add(shin);
+  const foot = new THREE.Mesh(footGeo, skinLimb);
+  foot.position.set(sx * 0.26, -0.60, front ? 0.16 : 0.34);
+  foot.scale.set(1.1, 0.5, 1.3); foot.castShadow = true; g.add(foot);
+  for (let t = 0; t < 3; t++) {
+    const toe = new THREE.Mesh(toeGeo, skinLimb);
+    toe.position.set(sx * 0.26 + (t - 1) * 0.10, -0.61, front ? 0.32 : 0.50);
+    toe.rotation.x = Math.PI / 2; toe.castShadow = true; g.add(toe);
+  }
+  toadBody.add(g);
+  return { g, thigh, shin, foot, front, sx };
+}
+for (const sx of [-1, 1]) { legs.push(makeLeg(sx, true)); legs.push(makeLeg(sx, false)); }
+
+/* tongue + sticky tip */
+const tongueGeo = new THREE.CylinderGeometry(0.075, 0.09, 1, 8, 1, false);
+tongueGeo.translate(0, 0.5, 0); tongueGeo.rotateX(Math.PI / 2);   // extends along +Z
+const tongueMat = new THREE.MeshStandardMaterial({ color: 0xe9789a, roughness: 0.35 });
+const tongue = new THREE.Mesh(tongueGeo, tongueMat);
+tongue.visible = false; tongue.frustumCulled = false;
+scene.add(tongue);
+const tipGeo = new THREE.SphereGeometry(0.16, 12, 10);
+const tipMesh = new THREE.Mesh(tipGeo, new THREE.MeshStandardMaterial({ color: 0xf492ae, roughness: 0.3 }));
+tipMesh.visible = false; tipMesh.frustumCulled = false;
+scene.add(tipMesh);
+scene.add(toad);
+
+/* ============================================================
+ * FLIES — pooled instanced bodies, wings and shadow dots
+ * ============================================================ */
+const flyGeo = new THREE.SphereGeometry(0.11, 8, 6);
+const wingGeo = new THREE.PlaneGeometry(0.20, 0.11);
+const dotTex = radialTex('rgba(0,0,0,0.55)', 'rgba(0,0,0,0)', 64);
+const dotGeo = new THREE.PlaneGeometry(1, 1);
+const flyBodyMesh = new THREE.InstancedMesh(flyGeo,
+  new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: 0.55, metalness: 0.25 }), C.fly.max);
+const flyWingMesh = new THREE.InstancedMesh(wingGeo,
+  new THREE.MeshBasicMaterial({ color: 0xdff0ff, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false }),
+  C.fly.max * 2);
+const flyDotMesh = new THREE.InstancedMesh(dotGeo,
+  new THREE.MeshBasicMaterial({ map: dotTex, transparent: true, depthWrite: false }), C.fly.max);
+for (const m of [flyBodyMesh, flyWingMesh, flyDotMesh]) { m.frustumCulled = false; scene.add(m); }
+const flies = [];
+for (let i = 0; i < C.fly.max; i++) {
+  flies.push({ on: false, x: 0, y: 0, z: 0, ax: 0, az: 0, vx: 0, vy: 0, vz: 0,
+    alt: 1, t: rr(0, 9), phase: rr(0, 6.283), dart: 0, dartT: 0, caught: false, held: false });
+}
+function spawnFly(f) {
+  for (let tries = 0; tries < 24; tries++) {
+    const a = rr(0, 6.283), d = rr(C.fly.respawnMin, C.fly.respawnMax);
+    const x = clamp(P.x + Math.cos(a) * d, -C.world.fenceR + 3, C.world.fenceR - 3);
+    const z = clamp(P.z + Math.sin(a) * d, -C.world.fenceR + 3, C.world.fenceR - 3);
+    if (pondAt(x, z)) continue;
+    if (Math.hypot(x - P.x, z - P.z) < 8) continue;
+    f.x = f.ax = x; f.z = f.az = z;
+    f.alt = rr(C.fly.minAlt, C.fly.maxAlt);
+    f.y = terrainH(x, z) + f.alt;
+    f.on = true; f.caught = false; f.held = false; f.dart = 0; f.t = rr(0, 4);
+    return;
+  }
+  f.x = f.ax = clamp(P.x + rr(-14, 14), -C.world.fenceR + 3, C.world.fenceR - 3);
+  f.z = f.az = clamp(P.z + rr(-14, 14), -C.world.fenceR + 3, C.world.fenceR - 3);
+  f.alt = 1.2; f.y = terrainH(f.x, f.z) + f.alt; f.on = true; f.caught = false; f.held = false;
+}
+function resetFlies() {
+  for (const f of flies) f.on = false;
+  for (let i = 0; i < C.fly.active; i++) spawnFly(flies[i]);
+}
+function flyTick(dt) {
+  for (const f of flies) {
+    if (!f.on || f.held) continue;
+    f.t -= dt; f.phase += dt * (11 + f.alt);
+    if (f.t <= 0) {                       // occasional dart to a new spot
+      f.t = rr(1.6, 4.2);
+      const a = rr(0, 6.283), d = rr(1.5, 6);
+      f.ax = clamp(f.x + Math.cos(a) * d, -C.world.fenceR + 2, C.world.fenceR - 2);
+      f.az = clamp(f.z + Math.sin(a) * d, -C.world.fenceR + 2, C.world.fenceR - 2);
+      f.alt = clamp(f.alt + rr(-0.9, 0.9), C.fly.minAlt, C.fly.maxAlt);
+    }
+    const dx = P.x - f.x, dz = P.z - f.z, dist = Math.hypot(dx, dz);
+    let tx = f.ax, tz = f.az, spd = C.fly.hoverSpeed;
+    if (dist < C.fly.startleR) { tx = f.x - dx; tz = f.z - dz; spd = C.fly.dartSpeed; f.alt = clamp(f.alt + 0.8 * dt, 0.5, C.fly.maxAlt); }
+    else if (dist < C.fly.attractR && dist > 1.5) { tx = lerp(f.ax, P.x, 0.55); tz = lerp(f.az, P.z, 0.55); }
+    const vx = (tx - f.x), vz = (tz - f.z), vl = Math.hypot(vx, vz) || 1;
+    f.x += (vx / vl) * spd * dt * 2.4;
+    f.z += (vz / vl) * spd * dt * 2.4;
+    f.y = terrainH(f.x, f.z) + f.alt + Math.sin(f.phase * 0.32) * 0.16;
+  }
+}
+const _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _v = new THREE.Vector3();
+function drawFlies(t) {
+  let wi = 0;
+  for (let i = 0; i < C.fly.max; i++) {
+    const f = flies[i];
+    if (!f.on) {
+      dummy.position.set(0, -50, 0); dummy.scale.set(0, 0, 0); dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      flyBodyMesh.setMatrixAt(i, dummy.matrix); flyDotMesh.setMatrixAt(i, dummy.matrix);
+      flyWingMesh.setMatrixAt(wi++, dummy.matrix); flyWingMesh.setMatrixAt(wi++, dummy.matrix);
+      continue;
+    }
+    const flap = Math.sin(t * 58 + f.phase) * 0.55;
+    dummy.position.set(f.x, f.y, f.z);
+    dummy.rotation.set(0, f.phase * 0.4, 0);
+    dummy.scale.set(1, 0.85, 1.25);
+    dummy.updateMatrix(); flyBodyMesh.setMatrixAt(i, dummy.matrix);
+    for (const sx of [-1, 1]) {
+      dummy.position.set(f.x + sx * 0.09, f.y + 0.055, f.z);
+      dummy.rotation.set(-0.5, sx * (0.5 + flap), sx * 0.9);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix(); flyWingMesh.setMatrixAt(wi++, dummy.matrix);
+    }
+    const gy = terrainH(f.x, f.z) + 0.03;
+    const s = clamp(0.22 - f.alt * 0.04, 0.06, 0.22);
+    dummy.position.set(f.x, gy, f.z); dummy.rotation.set(-Math.PI / 2, 0, 0);
+    dummy.scale.set(s, s, s);
+    dummy.updateMatrix(); flyDotMesh.setMatrixAt(i, dummy.matrix);
+  }
+  flyBodyMesh.instanceMatrix.needsUpdate = true;
+  flyWingMesh.instanceMatrix.needsUpdate = true;
+  flyDotMesh.instanceMatrix.needsUpdate = true;
+}
+
+/* ============================================================
+ * AUDIO — procedural Web Audio only, created on first gesture
+ * ============================================================ */
+const AUDIO = {
+  ctx: null, master: null, amb: null, comp: null, voices: [], ambSrc: null,
+  muted: false, volume: 0.7, chirpTimer: 0, critTimer: 0, duck: 1, ready: false,
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.comp = this.ctx.createDynamicsCompressor();
+    this.comp.threshold.value = -18; this.comp.knee.value = 24; this.comp.ratio.value = 4;
+    this.comp.attack.value = 0.003; this.comp.release.value = 0.25;
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : this.volume;
+    this.comp.connect(this.master); this.master.connect(this.ctx.destination);
+    this.amb = this.ctx.createGain(); this.amb.gain.value = 0.9; this.amb.connect(this.comp);
+    /* wind bed: looped filtered noise with slow LFO */
+    const len = this.ctx.sampleRate * 3;
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.2; }
+    const src = this.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520;
+    const wg = this.ctx.createGain(); wg.gain.value = 0.35;
+    src.connect(lp); lp.connect(wg); wg.connect(this.amb); src.start();
+    const lfo = this.ctx.createOscillator(); lfo.frequency.value = 0.07;
+    const lg = this.ctx.createGain(); lg.gain.value = 0.18;
+    lfo.connect(lg); lg.connect(wg.gain); lfo.start();
+    this.ambSrc = src;
+    /* four proximity buzz voices reused by the nearest flies */
+    for (let i = 0; i < 4; i++) {
+      const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 170;
+      const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 3.5;
+      const g = this.ctx.createGain(); g.gain.value = 0;
+      o.connect(bp); bp.connect(g); g.connect(this.comp); o.start();
+      this.voices.push({ o, g, fly: null });
+    }
+    this.ready = true;
+  },
+  setVol(v) { this.volume = v; if (this.master) this.master.gain.value = this.muted ? 0 : v; },
+  toggleMute() { this.muted = !this.muted; if (this.master) this.master.gain.value = this.muted ? 0 : this.volume; return this.muted; },
+  env(node, t0, peak, dur) {
+    node.gain.setValueAtTime(0.0001, t0);
+    node.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t0 + Math.min(0.02, dur * 0.2));
+    node.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  },
+  tone(type, f0, f1, dur, peak, dest) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+    const g = this.ctx.createGain();
+    this.env(g, t, peak, dur);
+    o.connect(g); g.connect(dest || this.comp);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+  noise(dur, peak, f0, f1, type) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, sr = this.ctx.sampleRate;
+    const n = Math.max(1, Math.floor(sr * dur));
+    const buf = this.ctx.createBuffer(1, n, sr), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const s = this.ctx.createBufferSource(); s.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = type || 'bandpass';
+    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(f1, 40), t + dur);
+    f.Q.value = 1.2;
+    const g = this.ctx.createGain(); this.env(g, t, peak, dur);
+    s.connect(f); f.connect(g); g.connect(this.comp); s.start(t); s.stop(t + dur + 0.02);
+  },
+  thwip() { this.noise(0.12, 0.22, 2600, 500, 'bandpass'); this.tone('sine', 900, 260, 0.11, 0.12); },
+  pop() { this.tone('sine', 480, 980, 0.07, 0.28); this.noise(0.06, 0.16, 1800, 600); },
+  gulp() { this.tone('sine', 300, 110, 0.2, 0.3); this.noise(0.14, 0.1, 900, 260, 'lowpass'); },
+  thud(v) { this.tone('sine', 110, 42, 0.17, 0.16 + v * 0.14); this.noise(0.1, 0.08 + v * 0.05, 700, 180, 'lowpass'); },
+  splash() { this.noise(0.36, 0.3, 1900, 320, 'bandpass'); this.noise(0.18, 0.14, 500, 140, 'lowpass'); },
+  leap() { this.tone('sine', 150, 470, 0.26, 0.2); this.noise(0.22, 0.15, 300, 1500, 'bandpass'); },
+  croak() {
+    if (!this.ctx) return;
+    for (let i = 0; i < 2; i++) {
+      const t = this.ctx.currentTime + i * 0.19;
+      const o = this.ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(96 + i * 12, t);
+      o.frequency.exponentialRampToValueAtTime(70, t + 0.16);
+      const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 620; lp.Q.value = 6;
+      const g = this.ctx.createGain(); this.env(g, t, 0.3, 0.18);
+      o.connect(lp); lp.connect(g); g.connect(this.comp);
+      o.start(t); o.stop(t + 0.24);
+    }
+  },
+  chime(step) {
+    const base = 620 * Math.pow(1.12, Math.min(step, 6));
+    [0, 0.07, 0.14].forEach((d, i) => {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime + d;
+      const o = this.ctx.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(base * (1 + i * 0.34), t);
+      const g = this.ctx.createGain(); this.env(g, t, 0.2, 0.22);
+      o.connect(g); g.connect(this.comp); o.start(t); o.stop(t + 0.3);
+    });
+  },
+  heartbeat() { this.tone('sine', 74, 46, 0.28, 0.34); },
+  death() {
+    if (!this.ctx) return;
+    this.tone('sawtooth', 320, 58, 1.3, 0.22);
+    this.tone('sine', 180, 40, 1.5, 0.18);
+    this.noise(0.8, 0.12, 900, 90, 'lowpass');
+    if (this.amb) this.amb.gain.exponentialRampToValueAtTime(0.12, this.ctx.currentTime + 1.2);
+  },
+  restoreAmb() { if (this.amb) this.amb.gain.setTargetAtTime(0.9, this.ctx.currentTime, 0.4); },
+  chirp() {
+    if (!this.ctx || !this.amb) return;
+    const t = this.ctx.currentTime;
+    const bird = Math.random() < 0.35;
+    const pulses = bird ? 3 : (2 + Math.floor(Math.random() * 4));
+    for (let i = 0; i < pulses; i++) {
+      const tt = t + i * (bird ? rr(0.09, 0.16) : rr(0.05, 0.09));
+      const o = this.ctx.createOscillator(); o.type = bird ? 'sine' : 'triangle';
+      const f0 = bird ? rr(1800, 3400) : rr(4200, 6200);
+      o.frequency.setValueAtTime(f0, tt);
+      o.frequency.exponentialRampToValueAtTime(f0 * (bird ? 0.7 : 0.82), tt + 0.05);
+      const g = this.ctx.createGain(); this.env(g, tt, bird ? 0.06 : 0.028, 0.06);
+      o.connect(g); g.connect(this.amb); o.start(tt); o.stop(tt + 0.1);
+    }
+  },
+  buzzUpdate(camPos) {
+    if (!this.ready) return;
+    const near = [];
+    for (const f of flies) {
+      if (!f.on || f.held) continue;
+      const d = Math.hypot(f.x - camPos.x, f.y - camPos.y, f.z - camPos.z);
+      if (d < 13) near.push({ f, d });
+    }
+    near.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < this.voices.length; i++) {
+      const v = this.voices[i], n = near[i];
+      if (!n) { v.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08); v.fly = null; continue; }
+      const amt = clamp(1 - n.d / 13, 0, 1);
+      v.g.gain.setTargetAtTime(0.006 + amt * amt * 0.055, this.ctx.currentTime, 0.06);
+      v.o.frequency.setTargetAtTime(150 + amt * 120, this.ctx.currentTime, 0.1);
+      v.fly = n.f;
+    }
+  }
+};
+
+/* ============================================================
+ * PLAYER CONTROL — state, keyboard / mouse / gamepad / touch input
+ * ============================================================ */
+const P = {
+  x: 0, z: 6, y: 0, vx: 0, vz: 0, vy: 0, yaw: 0, speed: 0,
+  grounded: true, inWater: null, squash: 1, breath: 0,
+  hunger: C.hunger.start, score: 0, best: 0, time: 0,
+  combo: 0, comboTimer: 0, lastEatT: -99,
+  leapT: 0, leapCool: 0, leapBuffer: 0, tongue: null, tongueCool: 0, gulp: 0, croak: 0,
+  deadT: 0, alive: true
+};
+let state = 'start';
+const input = { f: 0, r: 0, mx: 0, my: 0, hop: false, flick: false, flickAim: null, leap: false };
+const keys = Object.create(null);
+
+function loadBest() { try { return parseInt(localStorage.getItem(C.storage.best) || '0', 10) || 0; } catch (e) { return 0; } }
+function saveBest(v) { try { localStorage.setItem(C.storage.best, String(v)); } catch (e) { /* storage may be blocked */ } }
+P.best = loadBest();
+
+addEventListener('keydown', (e) => {
+  const c = e.code;
+  if (c === 'Space' || c === 'Tab' || c.startsWith('Arrow')) e.preventDefault();
+  if (e.repeat) return;                       // ignore auto-repeat so holds do not retrigger verbs
+  keys[c] = true;
+  if (c === 'KeyP' || c === 'Escape') {
+    if (state === 'play') pause(); else if (state === 'pause') resume();
+  }
+  if (c === 'KeyR') { if (state === 'over' || state === 'dead' || state === 'pause') { restart(); captureMouse(); } }
+  if (c === 'KeyM') { UI.setMute(AUDIO.toggleMute()); }
+  if (c === 'KeyH') { UI.showHint(); }
+  if (state === 'start' && (c === 'Enter' || c === 'NumpadEnter' || c === 'Space')) {
+    startRun(); captureMouse(); return;                 // start from the keyboard too
+  }
+  if (state === 'over' && (c === 'Enter' || c === 'NumpadEnter' || c === 'Space')) {
+    restart(); captureMouse(); return;
+  }
+  if (state === 'pause' && (c === 'Enter' || c === 'NumpadEnter')) { resume(); captureMouse(); return; }
+  if (state !== 'play') return;
+  if (c === 'Space') input.hop = true;
+  if (c === 'ShiftLeft' || c === 'ShiftRight') input.leap = true;
+  if (c === 'KeyE' || c === 'KeyJ') { input.flick = true; input.flickAim = null; }
+  if (c === 'KeyC') { P.croak = 0.5; AUDIO.croak(); }
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+/* ---------- mouse: orbit camera, click to flick, wheel to zoom ---------- */
+let yaw = Math.PI, pitch = C.camera.pitch, dist = C.camera.defaultDist;
+const mouseNDC = new THREE.Vector2(0, 0);
+const ZERO2 = new THREE.Vector2(0, 0);
+let pointerLocked = false, dragging = false;
+function captureMouse() {
+  if (IS_TOUCH || locked()) return;
+  try {
+    const p = canvas.requestPointerLock ? canvas.requestPointerLock() : null;
+    if (p && p.catch) p.catch(() => {});      // pointer lock is a nicety, never an error
+  } catch (err) { /* ignore: some browsers refuse it */ }
+}
+canvas.addEventListener('click', () => {
+  AUDIO.init();
+  if (state === 'start') { startRun(); captureMouse(); }
+  else if (state === 'over') { restart(); captureMouse(); }
+  else if (state === 'play') {
+    captureMouse();
+    input.flick = true; input.flickAim = 'mouse';
+  }
+});
+const locked = () => document.pointerLockElement === canvas;
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = locked();
+  if (!pointerLocked && state === 'play') pause();
+});
+addEventListener('mousemove', (e) => {
+  if (locked()) {
+    yaw -= e.movementX * 0.0026;
+    pitch = clamp(pitch + e.movementY * 0.0021, C.camera.pitchMin, C.camera.pitchMax);
+  } else {
+    mouseNDC.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    if (dragging && state === 'play') {
+      yaw -= e.movementX * 0.004; pitch = clamp(pitch + e.movementY * 0.003, C.camera.pitchMin, C.camera.pitchMax);
+    }
+  }
+});
+addEventListener('mousedown', (e) => { if (e.button === 0) dragging = true; });
+addEventListener('mouseup', () => { dragging = false; });
+addEventListener('wheel', (e) => {
+  if (state !== 'play') return;
+  e.preventDefault();
+  dist = clamp(dist + Math.sign(e.deltaY) * 0.7, C.camera.minDist, C.camera.maxDist);
+}, { passive: false });
+
+/* ---------- gamepad ---------- */
+const pad = { moveOn: false, prevA: false, prevB: false, prevX: false, prevRT: false, prevStart: false };
+function pollPad() {
+  if (!navigator.getGamepads) return;
+  const pads = navigator.getGamepads();
+  let gp = null;
+  for (const g of pads) if (g) { gp = g; break; }
+  if (!gp) return;
+  const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+  const m = Math.hypot(ax, ay);
+  if (m > 0.22) { input.mx = ax; input.my = ay; pad.moveOn = true; }
+  else if (pad.moveOn && m < 0.15) { input.mx = input.my = 0; pad.moveOn = false; }
+  const b = (i) => !!(gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5));
+  const a = b(0), bb = b(1), x = b(2), rt = (gp.buttons[7] && gp.buttons[7].value > 0.35) || b(7);
+  const start = b(9);
+  if (state === 'play') {
+    if (a && !pad.prevA) input.hop = true;
+    if (bb && !pad.prevB) input.leap = true;
+    if ((x || rt) && !pad.prevX && !pad.prevRT) { input.flick = true; input.flickAim = null; }
+  }
+  if (start && !pad.prevStart) { if (state === 'play') pause(); else if (state === 'pause') resume(); }
+  if ((state === 'over') && (a || x || start)) restart();
+  pad.prevA = a; pad.prevB = bb; pad.prevX = x; pad.prevRT = rt; pad.prevStart = start;
+}
+
+/* ---------- touch fallback ---------- */
+const IS_TOUCH = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+if (IS_TOUCH) {
+  document.getElementById('touch').classList.add('on');
+  const stick = document.getElementById('stick'), nub = document.getElementById('nub');
+  let sid = null, ox = 0, oy = 0;
+  stick.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0]; sid = t.identifier;
+    const r = stick.getBoundingClientRect(); ox = r.left + r.width / 2; oy = r.top + r.height / 2;
+    e.preventDefault();
+  }, { passive: false });
+  addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== sid) continue;
+      const dx = clamp((t.clientX - ox) / 52, -1, 1), dy = clamp((t.clientY - oy) / 52, -1, 1);
+      input.mx = dx; input.my = dy;
+      nub.style.transform = 'translate(' + (dx * 34) + 'px,' + (dy * 34) + 'px)';
+    }
+  }, { passive: true });
+  addEventListener('touchend', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== sid) continue;
+      sid = null; input.mx = input.my = 0; nub.style.transform = '';
+    }
+  });
+  const bind = (id, fn) => {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', (ev) => { ev.preventDefault(); AUDIO.init(); fn(); }, { passive: false });
+  };
+  bind('bt1', () => { if (state === 'play') input.hop = true; });
+  bind('bt3', () => { if (state === 'play') input.leap = true; });
+  bind('bt2', () => { if (state === 'play') { input.flick = true; input.flickAim = null; } });
+}
+
+/* ---------- terrain / water interaction for the toad ---------- */
+function groundAt(x, z) { return terrainH(x, z); }
+/* soft fence: the dense perimeter jungle pushes you back before any hard clamp */
+function fencePush(dt) {
+  const d = Math.hypot(P.x, P.z), lim = C.world.fenceR;
+  if (d <= lim || d < 1e-5) { UI.edgeHint(false); return 0; }
+  const over = d - lim, nx = P.x / d, nz = P.z / d;
+  const push = Math.min(over * C.world.fencePush, C.world.fencePush * 2.5);
+  P.vx -= nx * push * dt * 3;
+  P.vz -= nz * push * dt * 3;
+  const outSpeed = P.vx * nx + P.vz * nz;
+  if (outSpeed > 0) { const k = Math.min(1, over * 0.8); P.vx -= nx * outSpeed * k; P.vz -= nz * outSpeed * k; }
+  const hard = lim + 2.5;
+  if (d > hard) { P.x = nx * hard; P.z = nz * hard; }
+  UI.edgeHint(over > 0.4);
+  return over;
+}
+
+/* ============================================================
+ * CAMERA
+ * ============================================================ */
+const camTarget = new THREE.Vector3();
+let camPos = new THREE.Vector3(0, 6, 12);
+function updateCamera(dt, t) {
+  camTarget.set(P.x, P.y + 1.05, P.z);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  let want = new THREE.Vector3(
+    camTarget.x + Math.sin(yaw) * dist * cp,
+    camTarget.y + dist * sp,
+    camTarget.z + Math.cos(yaw) * dist * cp);
+  /* keep camera above the heightfield — sample along the ray */
+  for (let i = 1; i <= 4; i++) {
+    const s = i / 4;
+    const hx = lerp(camTarget.x, want.x, s), hz = lerp(camTarget.z, want.z, s);
+    const need = terrainH(hx, hz) + C.camera.heightPad * s;
+    if (want.y < need) want.y = need;
+  }
+  /* subtle camera-space sway */
+  want.x += Math.sin(t * 0.51) * C.camera.sway;
+  want.y += Math.sin(t * 0.37 + 1.2) * C.camera.sway * 0.7;
+  const k = 1 - Math.exp(-C.camera.lerp * dt);
+  camPos.lerp(want, k);
+  camera.position.copy(camPos);
+  camera.lookAt(camTarget);
+  sky.position.copy(camera.position);
+  sunDisc.quaternion.copy(camera.quaternion);
+  /* keep the shadow camera tight around the play area near the toad */
+  sun.position.copy(P ? new THREE.Vector3(P.x, P.y, P.z).addScaledVector(sunDir, 42) : sunDir.clone().multiplyScalar(42));
+  sun.target.position.set(P.x, P.y, P.z);
+  sun.target.updateMatrixWorld();
+}
+const ray = new THREE.Raycaster();
+const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+/* screen-centre aim: hit a vertical cylinder around the toad so the tongue also picks up
+   the vertical part of where you are pointing (aim high, shoot high) */
+function aimPoint(out) {
+  const p = locked() ? ZERO2 : mouseNDC;
+  ray.setFromCamera(p, camera);
+  const R = C.tongue.maxLength;
+  const o = ray.ray.origin, d = ray.ray.direction;
+  const ox = o.x - P.x, oz = o.z - P.z;
+  const a = d.x * d.x + d.z * d.z, b = 2 * (ox * d.x + oz * d.z);
+  const c = ox * ox + oz * oz - R * R;
+  const disc = b * b - 4 * a * c;
+  if (disc >= 0 && a > 1e-6) {
+    const sq = Math.sqrt(disc);
+    let t = (-b + sq) / (2 * a);
+    if (t < 0.2) t = (-b - sq) / (2 * a);
+    if (t > 0.2) {
+      out.set(o.x + d.x * t, o.y + d.y * t, o.z + d.z * t);
+      const dh = Math.hypot(out.x - P.x, out.z - P.z);
+      if (dh > 1e-3) {                        // keep it on the reach circle
+        const k = R / dh;
+        out.x = P.x + (out.x - P.x) * k;
+        out.z = P.z + (out.z - P.z) * k;
+      }
+      return out;
+    }
+  }
+  aimPlane.constant = -(P.y + C.tongue.mouthY);
+  if (!ray.ray.intersectPlane(aimPlane, out)) {
+    out.set(P.x + Math.sin(P.yaw) * R, P.y + C.tongue.mouthY, P.z + Math.cos(P.yaw) * R);
+  }
+  return out;
+}
+
+/* ============================================================
+ * UI
+ * ============================================================ */
+const el = (id) => document.getElementById(id);
+const UI = {
+  hud: el('hud'), bar: el('bar'), fc: el('fc'), timer: el('timer'), bh: el('bh'),
+  hint: el('hint'), vign: el('vignette'), popups: el('popups'), status: el('status'),
+  start: el('startPanel'), pause: el('pausePanel'), over: el('overPanel'),
+  muteBtn: el('muteBtn'), vol: el('vol'),
+  hintTimer: 0,
+  setMute(m) { this.muteBtn.textContent = 'Mute: ' + (m ? 'on' : 'off'); },
+  showHint() {
+    this.hint.innerHTML = '<b>WASD</b> move &nbsp;·&nbsp; <b>Space</b> hop &nbsp;·&nbsp; <b>Shift</b> leap &nbsp;·&nbsp; ' +
+      '<b>Click / E</b> tongue &nbsp;·&nbsp; <b>mouse</b> orbit &nbsp;·&nbsp; <b>scroll</b> zoom ' +
+      '&nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>M</b> mute &nbsp;·&nbsp; <b>C</b> croak';
+    this.hint.classList.remove('hide');
+    this.hintTimer = 8;
+  },
+  popup(txt, cls, x, y) {
+    const d = document.createElement('div');
+    d.className = 'pop' + (cls ? ' ' + cls : '');
+    d.textContent = txt;
+    d.style.left = (x * 100) + '%'; d.style.top = (y * 100) + '%';
+    this.popups.appendChild(d);
+    setTimeout(() => d.remove(), 1150);
+  },
+  project(v3) {
+    const p = v3.clone().project(camera);
+    return { x: (p.x * 0.5 + 0.5), y: (-p.y * 0.5 + 0.5), vis: p.z < 1 };
+  },
+  refresh() {
+    const h = P.hunger;
+    this.bar.style.width = (h / C.hunger.max * 100).toFixed(1) + '%';
+    this.bar.className = h < C.hunger.critical ? 'crit' : (h < C.hunger.warn ? 'warn' : '');
+    this.fc.textContent = P.score;
+    this.timer.textContent = P.time.toFixed(1) + 's  ·  best ' + P.best;
+    this.vign.style.opacity = h < C.hunger.critical
+      ? (0.35 + 0.25 * Math.sin(performance.now() * 0.005)).toFixed(3)
+      : (h < 30 ? ((30 - h) / 30 * 0.3).toFixed(3) : 0);
+  },
+  edgeHint(on) {
+    if (this.edge === on) return;
+    this.edge = on;
+    if (on && state === 'play') {
+      this.status.textContent = 'the jungle is thick here';
+      this.status.style.opacity = '0.85';
+    } else if (state === 'play') {
+      this.status.textContent = '';
+      this.status.style.opacity = '0';
+    }
+  }
+};
+UI.edge = false;
+el('resumeBtn').addEventListener('click', () => resume());
+el('againBtn').addEventListener('click', () => { restart(); captureMouse(); });
+/* the overlays sit on top of the canvas and swallow clicks, so they need their own handlers
+   (buttons, the volume slider and the credit links are excluded on purpose) */
+el('startPanel').addEventListener('click', (e) => {
+  if (e.target.closest('button, input, a')) return;
+  AUDIO.init(); startRun(); captureMouse();
+});
+el('overPanel').addEventListener('click', (e) => {
+  if (e.target.closest('button, input, a')) return;
+  restart(); captureMouse();
+});
+el('muteBtn').addEventListener('click', () => UI.setMute(AUDIO.toggleMute()));
+el('vol').addEventListener('input', (e) => { AUDIO.init(); AUDIO.setVol(e.target.value / 100); });
+el('bestStart').textContent = P.best;
+/* the pause screen shows the same bindings, so the list is copied instead of duplicated in markup */
+el('pauseKeys').innerHTML = el('keysCard').innerHTML;
+UI.setMute(false);
+
+function setState(s) {
+  state = s;
+  UI.start.classList.toggle('off', s !== 'start');
+  UI.pause.classList.toggle('off', s !== 'pause');
+  UI.over.classList.toggle('off', s !== 'over');
+  UI.hud.classList.toggle('on', s === 'play' || s === 'pause' || s === 'dead');
+  UI.hint.classList.toggle('hide', s !== 'play');   // the pause card lists the controls itself
+  if (s !== 'play' && locked()) document.exitPointerLock();
+}
+
+/* ============================================================
+ * GAME RULES — hunger, eating, combo, death, restart
+ * ============================================================ */
+function hop() {
+  if (!P.grounded || P.deadT > 0) return;
+  P.vy = C.toad.hopVel;
+  P.grounded = false;
+  P.hunger = Math.max(0, P.hunger - C.hunger.hopCost);
+  AUDIO.thud(0.35);
+}
+/* the Shift leap: a real lunge — much higher and far further than a hop */
+function leap() {
+  if (!P.grounded || P.deadT > 0 || P.leapCool > 0) return;
+  const sp = Math.hypot(P.vx, P.vz);
+  const dx = sp > 0.4 ? P.vx / sp : Math.sin(P.yaw);
+  const dz = sp > 0.4 ? P.vz / sp : Math.cos(P.yaw);
+  const push = Math.max(C.toad.leapPush, sp);      // keep momentum if you were already moving fast
+  P.vx = dx * push; P.vz = dz * push; P.vy = C.toad.leapVel;
+  P.grounded = false;
+  P.leapT = 1.0; P.leapCool = C.toad.leapCool;
+  P.squash = 1.16;                                // legs snap the body long on the launch
+  P.hunger = Math.max(0, P.hunger - C.hunger.leapCost);
+  AUDIO.leap();
+  const w = pondAt(P.x, P.z);
+  if (w && P.y < w.waterY) AUDIO.splash();
+  PART.burst(P.x, P.y + 0.08, P.z, 12, [0.46, 0.43, 0.31], 1.2, 1.3);
+}
+const wrapAngle = (a) => ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+/* lowest pitch that keeps a fully extended tongue clear of the heightfield */
+function pitchFloor(mouth, yaw) {
+  let need = -1;
+  const lens = [1.5, 3, 4.5, C.tongue.maxLength];
+  for (let i = 0; i < lens.length; i++) {
+    const s = lens[i];
+    const h = terrainH(mouth.x + Math.sin(yaw) * s, mouth.z + Math.cos(yaw) * s) + 0.1;
+    const req = (h - mouth.y) / s;                 // sin(pitch) must be at least this
+    if (req > need) need = req;
+  }
+  if (need >= 1) return 0;
+  return Math.max(-C.tongue.maxTonguePitch, Math.asin(clamp(need, -1, 1)));
+}
+/* world-space mouth: front of the head, rotated by the body's current facing */
+function mouthWorld() {
+  return new THREE.Vector3(
+    P.x + Math.sin(P.yaw) * C.tongue.mouthFwd,
+    P.y + C.tongue.mouthY,
+    P.z + Math.cos(P.yaw) * C.tongue.mouthFwd);
+}
+function tongueRect(aim) {
+  const mouth = mouthWorld();
+  let yawOff = 0;
+  if (aim) {
+    /* where you are looking turns the body; the shot itself stays level */
+    const want = Math.atan2(aim.x - P.x, aim.z - P.z);
+    const d = wrapAngle(want - P.yaw);
+    const snap = clamp(d, -C.tongue.maxSnap, C.tongue.maxSnap);
+    P.yaw += snap;
+    yawOff = clamp(d - snap, -C.tongue.maxTongueYaw, C.tongue.maxTongueYaw);
+  }
+  /* default attack vector: dead ahead and level, so it never drags through the dirt.
+     Then auto-aim: if a fly sits inside a modest cone around that vector, tilt onto it. */
+  let pitch = 0;
+  const reachMax = C.tongue.maxLength + C.tongue.grabRadius;
+  let best = null, bestErr = C.tongue.autoAimCone;
+  for (const f of flies) {
+    if (!f.on || f.held) continue;
+    const dx = f.x - mouth.x, dy = f.y - mouth.y, dz = f.z - mouth.z;
+    const flat = Math.hypot(dx, dz), dist = Math.hypot(dx, dy, dz);
+    if (dist < 0.25 || dist > reachMax) continue;
+    const flyYaw = wrapAngle(Math.atan2(dx, dz) - P.yaw);
+    if (Math.abs(flyYaw) > C.tongue.maxTongueYaw + C.tongue.autoAimCone) continue;   // not in front
+    const err = Math.hypot(Math.abs(flyYaw - yawOff), Math.atan2(dy, flat));
+    if (err < bestErr) { bestErr = err; best = { yaw: flyYaw, pitch: Math.atan2(dy, flat) }; }
+  }
+  if (best) {
+    yawOff = clamp(best.yaw, -C.tongue.maxTongueYaw, C.tongue.maxTongueYaw);
+    pitch = clamp(best.pitch, -C.tongue.maxTonguePitch, C.tongue.maxTonguePitch);
+  }
+  /* never let a shot saw through the ground, aimed or not */
+  const floor = pitchFloor(mouth, P.yaw + yawOff);
+  if (pitch < floor) pitch = floor;
+  P.tongue = { t: 0, len: 0, yawOff, pitch, dir: new THREE.Vector3(0, 0, 1), mouth, grabbed: null, phase: 'out' };
+  tongue.visible = tipMesh.visible = true;
+  P.tongueCool = C.tongue.cooldown;
+  AUDIO.thwip();
+}
+function tongueStep(dt) {
+  const T = P.tongue;
+  if (!T) return;
+  /* the tongue rides the head: its base and direction are rebuilt from the live facing,
+     so it always comes out of the mouth even if the toad keeps turning mid-flick */
+  const yaw = P.yaw + T.yawOff;
+  const cp = Math.cos(T.pitch);
+  T.dir.set(Math.sin(yaw) * cp, Math.sin(T.pitch), Math.cos(yaw) * cp);
+  T.mouth.copy(mouthWorld());
+  if (T.phase === 'out') {
+    T.t += dt;
+    const k = clamp(T.t / C.tongue.out, 0, 1);
+    T.len = C.tongue.maxLength * (0.35 + 0.65 * k);
+    if (k >= 1) {
+      tryGrab(T);
+      T.phase = 'in'; T.t = 0;
+    }
+  } else {
+    T.t += dt;
+    const k = clamp(T.t / C.tongue.in, 0, 1);
+    T.len = C.tongue.maxLength * (1 - k);
+    if (T.grabbed) {
+      T.grabbed.x = T.mouth.x + T.dir.x * T.len;
+      T.grabbed.y = T.mouth.y + T.dir.y * T.len;
+      T.grabbed.z = T.mouth.z + T.dir.z * T.len;
+    }
+    if (k >= 1) {
+      if (T.grabbed) eat(T.grabbed);
+      tongue.visible = tipMesh.visible = false;
+      P.tongue = null;
+    }
+  }
+  if (!P.tongue) return;
+  tongue.position.copy(T.mouth);
+  tongue.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), T.dir);
+  tongue.scale.set(1, 1, Math.max(0.05, T.len));
+  tipMesh.position.set(T.mouth.x + T.dir.x * T.len, T.mouth.y + T.dir.y * T.len, T.mouth.z + T.dir.z * T.len);
+  tipMesh.scale.setScalar(T.grabbed ? 1.3 : 1);
+}
+function tryGrab(T) {
+  let best = null, bestScore = -1;
+  const tip = new THREE.Vector3(T.mouth.x + T.dir.x * T.len, T.mouth.y + T.dir.y * T.len, T.mouth.z + T.dir.z * T.len);
+  const off = new THREE.Vector3();
+  for (const f of flies) {
+    if (!f.on || f.held) continue;
+    off.set(f.x - T.mouth.x, f.y - T.mouth.y, f.z - T.mouth.z);
+    const along = off.dot(T.dir);
+    if (along < 0 || along > T.len + C.tongue.grabRadius) continue;
+    const px = T.mouth.x + T.dir.x * along, py = T.mouth.y + T.dir.y * along, pz = T.mouth.z + T.dir.z * along;
+    const perp = Math.hypot(f.x - px, f.y - py, f.z - pz);
+    if (perp > C.tongue.grabRadius) continue;
+    const dtip = Math.hypot(f.x - tip.x, f.y - tip.y, f.z - tip.z);
+    const score = 1 / (0.4 + perp + dtip * 0.3);
+    if (score > bestScore) { bestScore = score; best = f; }
+  }
+  if (best) { best.held = true; T.grabbed = best; AUDIO.pop(); }
+}
+function eat(f) {
+  f.on = false; f.held = false;
+  P.score++;
+  const now = P.time;
+  let gain = C.hunger.flyValue;
+  if (now - P.lastEatT <= C.hunger.comboWindow) {
+    P.combo++;
+    gain += C.hunger.comboBonus * Math.min(P.combo, 5);
+    AUDIO.chime(P.combo);
+    const s = UI.project(new THREE.Vector3(f.x, f.y, f.z));
+    if (s.vis) UI.popup('+' + C.hunger.comboBonus.toFixed(0) + ' combo x' + P.combo, 'combo', clamp(s.x, 0.08, 0.9), clamp(s.y, 0.1, 0.85));
+  } else P.combo = 0;
+  P.lastEatT = now;
+  P.hunger = Math.min(C.hunger.max, P.hunger + gain);
+  P.gulp = 0.45;
+  AUDIO.gulp();
+  const s = UI.project(new THREE.Vector3(f.x, f.y, f.z));
+  if (s.vis && P.combo === 0) UI.popup('+' + C.hunger.flyValue, '', clamp(s.x, 0.08, 0.9), clamp(s.y, 0.1, 0.85));
+  if (P.score > P.best) { P.best = P.score; saveBest(P.best); }
+  spawnFly(f);
+}
+function die() {
+  if (!P.alive) return;
+  P.alive = false; P.deadT = 0.0001;
+  AUDIO.death();
+  UI.status.textContent = 'the toad collapses…';
+  UI.status.style.opacity = '1';
+  if (state === 'play') setState('dead');
+}
+function finishDeath() {
+  el('ovScore').textContent = P.score;
+  el('ovBest').textContent = P.best;
+  el('ovTime').textContent = P.time.toFixed(1) + 's';
+  setState('over');
+  UI.status.style.opacity = '0';
+}
+function startRun() {
+  AUDIO.init();
+  resetRun();
+  setState('play');
+  UI.showHint();
+}
+function resetRun() {
+  P.x = 0; P.z = 6; P.vx = P.vy = P.vz = 0; P.yaw = 0;
+  P.y = groundAt(P.x, P.z);
+  P.hunger = C.hunger.start; P.score = 0; P.time = 0;
+  P.combo = 0; P.lastEatT = -99; P.leapT = 0; P.leapCool = 0; P.leapBuffer = 0;
+  P.tongue = null; P.tongueCool = 0; P.gulp = 0; P.grounded = true; P.inWater = null;
+  P.squash = 1; P.deadT = 0; P.alive = true; P.speed = 0;
+  toad.visible = true;
+  toad.rotation.set(0, 0, 0); toad.scale.set(1, 1, 1);
+  toadBody.scale.set(1, 1, 1); toadBody.rotation.set(0, 0, 0);
+  for (const e of eyes) e.scale.set(1, 1.02, 1);
+  for (const pv of eyePivots) pv.rotation.set(-0.32, 0, 0);
+  tongue.visible = tipMesh.visible = false;
+  resetFlies();
+  yaw = Math.PI; pitch = C.camera.pitch; dist = C.camera.defaultDist;
+  camPos.set(P.x, P.y + 4, P.z + 7);
+  AUDIO.init(); AUDIO.restoreAmb();
+  UI.status.style.opacity = '0';
+}
+function restart() { resetRun(); setState('play'); AUDIO.init(); }
+function pause() {
+  if (state !== 'play') return;
+  setState('pause');
+  if (AUDIO.ctx) AUDIO.amb.gain.setTargetAtTime(0.25, AUDIO.ctx.currentTime, 0.15);
+}
+function resume() {
+  if (state !== 'pause') return;
+  setState('play');
+  AUDIO.init();
+  if (AUDIO.ctx) AUDIO.amb.gain.setTargetAtTime(0.9, AUDIO.ctx.currentTime, 0.2);
+}
+addEventListener('blur', () => { if (state === 'play') pause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pause(); });
+
+/* ============================================================
+ * TOAD ANIMATION + PHYSICS STEP
+ * ============================================================ */
+const UP = new THREE.Vector3(0, 1, 0);
+function stepToad(dt) {
+  /* input vector, camera-relative */
+  let ix = input.mx, iz = input.my;
+  if (!pad.moveOn) {
+    ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+    iz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
+    if (ix || iz) { const l = Math.hypot(ix, iz); ix /= l; iz /= l; }
+  }
+  /* leap (Shift) is edge-triggered and buffered, so pressing just before landing still fires */
+  if (input.leap) { P.leapBuffer = 0.2; input.leap = false; }
+  if (P.leapCool > 0) P.leapCool -= dt;
+  if (P.leapBuffer > 0) {
+    P.leapBuffer -= dt;
+    if (P.grounded && P.leapCool <= 0 && P.alive) { P.leapBuffer = 0; leap(); }
+  }
+  if (P.leapT > 0 && !P.grounded) P.leapT = Math.max(0, P.leapT - dt);
+
+  const fw = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const rt = new THREE.Vector3().crossVectors(fw, UP);
+  const mag = Math.min(1, Math.hypot(ix, iz));
+  let tvx = 0, tvz = 0;
+  if (mag > 0.01 && P.alive) {
+    const spd = C.toad.speed * (P.inWater ? C.toad.swimMult : 1) * (P.grounded ? 1 : 0.85) * mag;
+    tvx = (fw.x * -iz + rt.x * ix) * spd;
+    tvz = (fw.z * -iz + rt.z * ix) * spd;
+  }
+  /* a leap carries: while it is in the air the usual steering barely bites */
+  const acc = (!P.grounded && P.leapT > 0) ? C.toad.accel * C.toad.leapSteer : C.toad.accel;
+  const k = 1 - Math.exp(-acc * dt);
+  P.vx = lerp(P.vx, tvx, k); P.vz = lerp(P.vz, tvz, k);
+  fencePush(dt);
+  const half2 = C.world.size / 2 - 1.5;
+  P.x = clamp(P.x + P.vx * dt, -half2, half2);
+  P.z = clamp(P.z + P.vz * dt, -half2, half2);
+  const sp = Math.hypot(P.vx, P.vz);
+  P.speed = sp;
+
+  /* vertical: gravity + heightfield footing */
+  const gh = groundAt(P.x, P.z);
+  if (!P.grounded) {
+    P.vy -= C.toad.gravity * dt;
+    P.y += P.vy * dt;
+    if (P.y <= gh) {
+      const impact = Math.min(Math.abs(P.vy) / C.toad.hopVel, 1.4);
+      P.y = gh; P.vy = 0; P.grounded = true;
+      P.squash = 1 - 0.34 * impact;
+      AUDIO.thud(impact);
+      const w = pondAt(P.x, P.z);
+      if (w && gh < w.waterY) { AUDIO.splash(); PART.burst(P.x, w.waterY, P.z, 18, [0.55, 0.8, 0.9], 1.4, 2.6); }
+      else if (impact > 0.25) PART.burst(P.x, gh + 0.05, P.z, Math.round(4 + impact * 6), [0.45, 0.42, 0.3], 0.9, 1.1);
+    }
+  } else {
+    P.y = gh;
+  }
+  /* water state + wading splashes */
+  const pw = pondAt(P.x, P.z);
+  const wasIn = P.inWater;
+  P.inWater = (pw && gh < pw.waterY - 0.02) ? pw : null;
+  if (P.inWater && !wasIn) { AUDIO.splash(); PART.burst(P.x, P.inWater.waterY, P.z, 20, [0.55, 0.8, 0.9], 1.5, 2.4); }
+  if (P.inWater && sp > 1 && Math.random() < dt * 8) PART.burst(P.x, P.inWater.waterY, P.z, 4, [0.6, 0.85, 0.95], 0.6, 1.4);
+
+  /* face travel direction */
+  if (sp > 0.35) {
+    const want = Math.atan2(P.vx, P.vz);
+    let d = ((want - P.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    P.yaw += clamp(d, -C.toad.turnRate * dt, C.toad.turnRate * dt);
+  }
+  if (input.flick && P.tongueCool <= 0 && P.alive) {
+    const aim = input.flickAim === 'mouse' ? aimPoint(new THREE.Vector3()) : null;
+    tongueRect(aim);
+  }
+  input.flick = false; input.flickAim = null;
+  if (input.hop) { hop(); input.hop = false; }
+  if (P.tongueCool > 0) P.tongueCool -= dt;
+  tongueStep(dt);
+
+  /* ---- pose ---- */
+  toad.position.set(P.x, P.y, P.z);
+  toad.rotation.y = P.yaw;
+  P.breath += dt * (P.alive ? 1.9 : 0.6);
+  const air = !P.grounded;
+  const breathe = 1 + Math.sin(P.breath) * 0.035;
+  P.squash = lerp(P.squash, 1, 1 - Math.exp(-9 * dt));
+  let sy = P.squash * breathe * (air ? 1.12 : 1);
+  let sxz = (2 - P.squash) * (air ? 0.9 : 1);
+  /* stretched out mid-leap, like a toad sailing */
+  if (air && P.leapT > 0) { const amt = clamp(P.leapT, 0, 1); sy *= 1 + 0.15 * amt; sxz *= 1 - 0.09 * amt; }
+  if (P.gulp > 0) { P.gulp -= dt; const g = Math.sin((0.45 - P.gulp) / 0.45 * Math.PI); sxz += g * 0.1; }
+  toadBody.scale.set(sxz, sy, sxz);
+  /* throat pouch inflates on croak and pulses on gulp */
+  const croakAmt = P.croak > 0 ? Math.sin((0.5 - P.croak) / 0.5 * Math.PI) : 0;
+  if (P.croak > 0) P.croak -= dt;
+  const gulpAmt = P.gulp > 0 ? Math.sin((0.45 - P.gulp) / 0.45 * Math.PI) : 0;
+  throat.scale.set(0.44 + croakAmt * 0.4 + gulpAmt * 0.2, 0.28 + croakAmt * 0.5 + gulpAmt * 0.25, 0.44 + croakAmt * 0.35);
+  /* legs: tuck in mid-air, deeper tuck while leaping */
+  const tuck = air ? (P.leapT > 0 ? 1.4 : 1) : 0;
+  for (const L of legs) {
+    const swing = sp > 0.4 ? Math.sin(P.breath * 3.4 + (L.front ? 0 : Math.PI)) * 0.35 : 0;
+    L.g.rotation.x = lerp(L.g.rotation.x, (L.front ? swing : -swing) + (tuck ? (L.front ? -0.7 : 0.85) : 0), 1 - Math.exp(-12 * dt));
+    L.g.rotation.z = lerp(L.g.rotation.z, tuck ? L.sx * 0.35 : 0, 1 - Math.exp(-12 * dt));
+  }
+  /* eyes track the nearest fly: rotate a pivot on the eyeball instead of moving a loose sphere */
+  let near = null, nd = 9;
+  for (const f of flies) { if (!f.on) continue; const d = Math.hypot(f.x - P.x, f.z - P.z); if (d < nd) { nd = d; near = f; } }
+  let lookYaw = 0, lookPitch = -0.32;            // idle gaze matches the modelled up-forward look
+  if (near && P.alive) {
+    const lx = near.x - P.x, ly = near.y - (P.y + 1.15), lz = near.z - P.z;
+    const ca = Math.cos(-P.yaw), sa = Math.sin(-P.yaw);
+    const rx = lx * ca - lz * sa, rz = lx * sa + lz * ca;
+    lookYaw = clamp(Math.atan2(rx, rz), -0.75, 0.75);
+    lookPitch = clamp(-Math.atan2(ly, Math.hypot(rx, rz)), -0.5, 0.5);
+  }
+  for (let i = 0; i < 2; i++) {
+    const pv = eyePivots[i];
+    pv.rotation.y = lerp(pv.rotation.y, lookYaw, 1 - Math.exp(-11 * dt));
+    pv.rotation.x = lerp(pv.rotation.x, lookPitch, 1 - Math.exp(-11 * dt));
+    eyes[i].scale.y = P.alive ? 1.02 : 0.12;      // shuts on death
+  }
+  /* death: deflate and topple */
+  if (P.deadT > 0) {
+    P.deadT += dt;
+    const k = clamp(P.deadT / 1.1, 0, 1);
+    toadBody.scale.set(1 + k * 0.5, lerp(1, 0.34, k), 1 + k * 0.5);
+    toad.rotation.z = k * Math.PI * 0.5;
+    toad.position.y = P.y + k * 0.05;
+    if (P.deadT > 1.5 && state === 'dead') finishDeath();
+  }
+}
+
+/* ============================================================
+ * GAME LOOP
+ * ============================================================ */
+let prev = performance.now(), acc = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dtReal = (now - prev) / 1000; prev = now;
+  if (!(dtReal > 0)) dtReal = 0;              // guard against clock weirdness on tab switch
+  if (dtReal > C.loop.maxFrameDelta) dtReal = C.loop.maxFrameDelta;
+  const running = state === 'play' || state === 'dead';
+  if (running) {
+    acc += dtReal;
+    let steps = 0;
+    while (acc >= C.loop.fixed && steps < C.loop.maxSteps) {
+      acc -= C.loop.fixed; steps++;
+      const dt = C.loop.fixed;
+      uTime.value += dt;
+      if (state === 'play') {
+        pollPad();
+        stepToad(dt);
+        /* hunger drain: idling is cheap, moving costs more, and a leap is paid for on launch */
+        const mv = P.speed > 0.4;
+        let rate = C.hunger.base * (mv ? C.hunger.moveMult : C.hunger.idleMult);
+        if (!P.grounded) rate *= P.leapT > 0 ? 1.3 : 1.12;
+        if (P.inWater) rate *= 1.1;
+        P.hunger = Math.max(0, P.hunger - rate * dt);
+        P.time += dt;
+        if (P.comboTimer > 0) P.comboTimer -= dt;
+        if (P.hunger <= 0) die();
+        /* critical heartbeat */
+        if (P.hunger < C.hunger.critical) {
+          P.critTimer = (P.critTimer || 0) - dt;
+          if (P.critTimer <= 0) { AUDIO.heartbeat(); P.critTimer = C.hunger.criticalPulse; }
+        } else P.critTimer = 0;
+      } else {
+        stepToad(dt);
+      }
+      flyTick(dt);
+      PART.step(dt);
+    }
+    if (acc > C.loop.fixed * C.loop.maxSteps) acc = 0;
+  } else {
+    uTime.value += dtReal * 0.4;
+    if (state !== 'pause') { flyTick(dtReal); PART.step(dtReal); }   // ambient life keeps moving on the menus
+  }
+  /* ambience chirp scheduler (runs while audible) */
+  if (AUDIO.ctx && state !== 'pause') {
+    AUDIO.chirpTimer -= dtReal;
+    if (AUDIO.chirpTimer <= 0) { AUDIO.chirp(); AUDIO.chirpTimer = rr(0.35, 2.4); }
+  }
+  /* visuals */
+  updateCamera(dtReal, uTime.value);
+  drawFlies(uTime.value);
+  wobbleWater(uTime.value);
+  for (const c of clouds) {
+    c.position.x += c.userData.spd * dtReal;
+    if (c.position.x > 300) c.position.x = -300;
+  }
+  {
+    const mp = motes.pos, g = motes.p.geometry.attributes.position;
+    for (let i = 0; i < motes.n; i++) {
+      mp[i * 3] += Math.sin(uTime.value * 0.4 + i) * 0.22 * dtReal;
+      mp[i * 3 + 1] += (0.22 + Math.sin(i) * 0.12) * dtReal;
+      mp[i * 3 + 2] += Math.cos(uTime.value * 0.33 + i * 0.7) * 0.22 * dtReal;
+      if (mp[i * 3 + 1] > 10) { mp[i * 3 + 1] = 0.2; mp[i * 3] = P.x + rr(-22, 22); mp[i * 3 + 2] = P.z + rr(-22, 22); }
+    }
+    g.needsUpdate = true;
+    const ff = fireflies;
+    for (let i = 0; i < ff.n; i++) {
+      const b = Math.max(0, Math.sin(uTime.value * 1.7 + ff.ph[i]));
+      const v = b * b * b;
+      ff.cs[i * 3] = 0.55 * v; ff.cs[i * 3 + 1] = 1.0 * v; ff.cs[i * 3 + 2] = 0.42 * v;
+      ff.pos[i * 3 + 1] += Math.sin(uTime.value * 0.6 + ff.ph[i]) * 0.2 * dtReal;
+    }
+    ff.p.geometry.attributes.color.needsUpdate = true;
+    ff.p.geometry.attributes.position.needsUpdate = true;
+  }
+  AUDIO.buzzUpdate(camera.position);
+  if (state === 'play' || state === 'dead') UI.refresh();
+  if (UI.hintTimer > 0) {
+    UI.hintTimer -= dtReal;
+    if (UI.hintTimer <= 0) UI.hint.classList.add('hide');
+  }
+  renderer.render(scene, camera);
+}
+
+/* boot */
+P.y = groundAt(P.x, P.z);
+resetFlies();
+camPos.set(P.x, P.y + 5, P.z + 8);
+setState('start');
+UI.refresh();
+requestAnimationFrame(frame);
+
+/* single entry object; nothing else leaks into the global scope */
+window.TOADGAME = {
+  CONFIG: C,
+  start: startRun, restart, pause, resume,
+  state: () => state,
+  player: P,
+  audio: AUDIO,
+  /* handy hooks for tuning and automated checks */
+  debug: {
+    flies, input, keys, groundAt, pondAt, terrainH, aimPoint, spawnFly,
+    toad, eyes, eyePivots, tongueMesh: tongue, camera, renderer, scene
+  }
+};
+</script>
+</body>
+</html>
