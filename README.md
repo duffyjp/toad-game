@@ -15,15 +15,11 @@ just to see what this stack can do.  My conclusion is: A lot, and very quickly.
 
 ## Playing it
 
-Download `index.html` and double-click it. It opens in Chrome, Edge or Firefox,
-and the game starts the moment you click the screen. Nothing to install, nothing to
-build, no account, no ads, no launcher.
+* Option 1: Access directly from GitHub Pages: https://duffyjp.github.io/toad-game/
+* Option 2: Download `index.html` and double-click it. 
 
 The only thing it needs is an internet connection, because the 3D library it runs on is
 fetched from the web when the page loads.
-
-Or turn on GitHub Pages for the repository and it will play right in the browser without
-downloading anything at all.
 
 There's also a touch fallback if you open it on a phone, and it works with a normal
 Xbox or PlayStation controller if one happens to be plugged in.
