@@ -1,4 +1,4 @@
-# Toad Feast
+# Toad Game
 
 You're a toad in a jungle clearing. Flies buzz around you, your hunger never stops
 draining, and the only way to stay alive is to eat them — by whipping your long sticky
@@ -69,7 +69,7 @@ you come back.
 
 ## How this was made
 
-Toad Feast was made with **Strata**, working alongside **Qwen3.8-Flash-Next IQ3_S**,
+Toad Game was made with **Strata**, working alongside **Qwen3.8-Flash-Next IQ3_S**,
 on an ordinary desktop PC.
 
 It's genuinely one file. Everything in it — the toad, the trees, the flies, the grass,
