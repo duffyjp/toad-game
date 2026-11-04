@@ -8,6 +8,9 @@ That's the whole game: wander, chase, eat, and last a little longer than you did
 time. A good run is a minute or two. It's a small, silly, oddly satisfying loop, and the
 "best" number in the corner is the only reason you'll keep coming back.
 
+This was my first experiment with both Strata and Qwen3.8-Flash-Next.  The goal was
+just to see what this stack can do.  My conclusion is: A lot, and very quickly.
+
 ![The toad, in the clearing](screenshot.png)
 
 ## Playing it
@@ -82,10 +85,17 @@ The only outside piece is [three.js](https://threejs.org), the friendly 3D libra
 stands on, which is pulled in at runtime and is MIT licensed like this game.
 
 Most of the work was back and forth rather than big design up front: the toad started
-green until somebody pointed out that toads are brown; the tongue used to fire at the
+green until pointed out that toads are brown; the tongue used to fire at the
 angle the camera was pointed, which put it through the dirt; the leap replaced a much
-less fun "walk faster" button. Small honest fixes like that, one after another, until it
-felt good.
+less fun "walk faster" button. Small fixes like that, one after another, until it
+felt right.
+
+## Stats
+
+| Tokens | Time |
+|--------|------|
+![tokens](tokens.png) | ![time](time.png)
+
 
 ## If you want to tinker
 
@@ -96,7 +106,7 @@ Change a number, save, refresh, and the game is different. It's all safe to poke
 
 ## Credits
 
-Written and put together by **duffyjp** — [github.com/duffyjp](https://github.com/duffyjp).
+Vibecoded by **duffyjp** — [github.com/duffyjp](https://github.com/duffyjp).
 The game lives at [github.com/duffyjp/toad-game](https://github.com/duffyjp/toad-game).
 
 3D rendering by the three.js authors (MIT). No other libraries, art or audio were used,
