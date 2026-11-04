@@ -15,7 +15,7 @@ just to see what this stack can do.  My conclusion is: A lot, and very quickly.
 
 ## Playing it
 
-Download `toad-game.html` and double-click it. It opens in Chrome, Edge or Firefox,
+Download `index.html` and double-click it. It opens in Chrome, Edge or Firefox,
 and the game starts the moment you click the screen. Nothing to install, nothing to
 build, no account, no ads, no launcher.
 
@@ -99,7 +99,7 @@ felt right.
 
 ## If you want to tinker
 
-Open the file in any text editor and near the top there is one tidy block of settings
+Open `index.html` in any text editor and near the top there is one tidy block of settings
 with a comment above it. That's where the whole game's personality lives: how fast hunger
 drains, how many flies are out at once, how far the tongue reaches, how big a leap is.
 Change a number, save, refresh, and the game is different. It's all safe to poke at.
