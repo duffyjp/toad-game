@@ -21,8 +21,9 @@ just to see what this stack can do.  My conclusion is: A lot, and very quickly.
 The only thing it needs is an internet connection, because the 3D library it runs on is
 fetched from the web when the page loads.
 
-There's also a touch fallback if you open it on a phone, and it works with a normal
-Xbox or PlayStation controller if one happens to be plugged in.
+There's also a full touch mode if you open it on a phone — thumb pad, action buttons and
+pinch zoom — and it works with a normal Xbox or PlayStation controller if one happens to be
+plugged in.
 
 ## Controls
 
@@ -40,6 +41,20 @@ Xbox or PlayStation controller if one happens to be plugged in.
 - **H** — bring the controls back up if you've forgotten them
 
 If your cursor gets captured and you want it back, press Esc.
+
+### On a phone
+
+Everything you need lives on the screen, so there's nothing to plug in and no keyboard to hunt for. The control list on the start and pause screens swaps itself over to match.
+
+- **Left pad** — drag your thumb around it to walk and steer
+- **Drag anywhere else** — swing the camera around the toad
+- **Pinch** — zoom in and out
+- **TONGUE** — shoot your tongue
+- **HOP** — a little hop
+- **LEAP** — a real leap, the big one
+- **PAUSE** — pause; mute and volume are on that screen
+
+You can steer and turn the camera at the same time, which is exactly what you'll want when a fly is off to one side.
 
 ![A leap, midway](screenshot-leap.png)
 

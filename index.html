@@ -56,8 +56,11 @@
   /* ---------- full-screen panels ---------- */
   .panel{position:fixed;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;
     background:radial-gradient(ellipse at 50% 40%,rgba(16,32,22,.82),rgba(4,9,7,.95));pointer-events:auto}
+  /* a short window (or a phone in landscape) can be shorter than the card, and flex centring
+     would otherwise clip both ends with no way to reach them */
+  .panel{overflow-y:auto;overscroll-behavior:contain}
   .panel.off{display:none}
-  .card{max-width:560px;padding:30px 34px;border:1px solid var(--edge);border-radius:16px;background:rgba(8,18,13,.72);
+  .card{width:min(560px,92vw);margin:auto;padding:30px 34px;border:1px solid var(--edge);border-radius:16px;background:rgba(8,18,13,.72);
     box-shadow:0 20px 60px rgba(0,0,0,.55)}
   h1{margin:0 0 6px;font-size:46px;letter-spacing:.02em;color:#bfe89f;text-shadow:0 3px 0 rgba(0,0,0,.35)}
   .pitch{margin:0 0 18px;color:#c3d7bd;font-size:15px}
@@ -72,6 +75,24 @@
   .keys{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:18px 0 2px;
     text-align:left;font-size:12.5px;color:#cfdcc9}
   .keys>div{display:flex;gap:9px;align-items:baseline}
+  /* the keyboard list and the touch list are sub-grids that each span both columns, so only one
+     of them is ever switched on (see keysTouch / keysDesktop in the script).
+     "subgrid" inherits the parent's two columns; the fallback keeps it correct where unsupported. */
+  #keysDesktop,#keysTouch{display:grid;grid-column:1/-1;gap:6px 18px;
+    grid-template-columns:repeat(2,minmax(0,1fr))}
+  @supports (grid-template-columns:subgrid){
+    #keysDesktop,#keysTouch{grid-template-columns:subgrid}
+  }
+  /* Phone widths. Must come after the base rules above, or equal-specificity declarations later in
+     the sheet would win and the columns would stay two-up and overflow the card. */
+  @media (max-width:620px){
+    .card{padding:22px 18px}
+    h1{font-size:34px}
+    /* two columns of control rows are too cramped on a phone, so stack them */
+    .keys,#keysDesktop,#keysTouch{grid-template-columns:minmax(0,1fr);gap:5px 0;font-size:12.5px}
+    #hint{display:none}
+  }
+  #keysDesktop.off,#keysTouch.off{display:none}
   .keys .kbd{flex:0 0 auto;min-width:64px;text-align:center}
   .keys .wide{grid-column:1/-1;color:var(--dim);margin-top:4px}
   .credit{margin-top:18px;font-size:11.5px;color:var(--dim);letter-spacing:.02em;line-height:1.6}
@@ -86,13 +107,16 @@
   /* ---------- touch ---------- */
   #touch{display:none}
   #touch.on{display:block}
+  /* touch-action:none on the stick is what makes it work on iOS: without it Safari treats a
+     drag inside the element as a page gesture and never delivers a usable touchmove */
   #stick{position:absolute;left:22px;bottom:22px;width:130px;height:130px;border-radius:50%;
-    border:1px solid var(--edge);background:rgba(0,0,0,.3);pointer-events:auto}
+    border:1px solid var(--edge);background:rgba(0,0,0,.3);pointer-events:auto;touch-action:none}
   #nub{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;
-    background:rgba(220,240,210,.35)}
+    background:rgba(220,240,210,.35);pointer-events:none}
   .tbtn{position:absolute;right:22px;width:78px;height:78px;border-radius:50%;border:1px solid var(--edge);
-    background:rgba(30,60,36,.55);color:#fff;font-size:13px;pointer-events:auto}
+    background:rgba(30,60,36,.55);color:#fff;font-size:13px;pointer-events:auto;touch-action:none}
   #bt1{bottom:34px}#bt2{bottom:124px}#bt3{bottom:214px}
+  .tbtn.small{left:calc(50% - 31px);right:auto;top:14px;width:62px;height:62px;font-size:11px}
 </style>
 </head>
 <body>
@@ -116,14 +140,16 @@
   <button class="tbtn" id="bt1">HOP</button>
   <button class="tbtn" id="bt3">LEAP</button>
   <button class="tbtn" id="bt2">TONGUE</button>
+  <button class="tbtn small" id="bt4">PAUSE</button>
 </div>
 
 <div class="panel" id="startPanel">
   <div class="card">
     <h1>Toad Game</h1>
     <p class="pitch">You are a toad in a jungle clearing. Gobble flies with your tongue before hunger eats you.</p>
-    <div class="big" id="startCta">Click anywhere to start &nbsp;<span style="color:#a9bda6">(or press Enter)</span></div>
+    <div class="big" id="startCta">Click anywhere to start &nbsp;<span id="ctaKey" style="color:#a9bda6">(or press Enter)</span></div>
     <div class="keys" id="keysCard">
+      <div id="keysDesktop">
       <div><span class="kbd">W A S D</span><span>move through the clearing</span></div>
       <div><span class="kbd">Space</span><span>hop</span></div>
       <div><span class="kbd">Shift</span><span>big forward leap</span></div>
@@ -137,6 +163,16 @@
       <div><span class="kbd">R</span><span>restart the run</span></div>
       <div><span class="kbd">H</span><span>show these controls</span></div>
       <div class="wide">Gamepad: left stick move &nbsp;·&nbsp; A hop &nbsp;·&nbsp; B leap &nbsp;·&nbsp; RT / X tongue &nbsp;·&nbsp; Start pause.</div>
+      </div>
+      <div id="keysTouch" class="off">
+      <div><span class="kbd">Left pad</span><span>drag to move and steer</span></div>
+      <div><span class="kbd">Drag the world</span><span>orbit the camera</span></div>
+      <div><span class="kbd">Pinch</span><span>zoom in / out</span></div>
+      <div><span class="kbd">TONGUE</span><span>shoot your tongue</span></div>
+      <div><span class="kbd">HOP</span><span>a small jump</span></div>
+      <div><span class="kbd">LEAP</span><span>a big forward leap</span></div>
+      <div><span class="kbd">Pause button</span><span>pause &nbsp;·&nbsp; mute and volume there too</span></div>
+      </div>
     </div>
     <div class="small">Best run: <b id="bestStart">0</b> flies.</div>
     <div class="credit">Toad Game by <a href="https://github.com/duffyjp" target="_blank" rel="noopener">duffyjp</a>
@@ -155,7 +191,7 @@
       <span>Volume</span><input type="range" id="vol" min="0" max="100" value="70">
     </div>
     <div class="keys" id="pauseKeys"></div>
-    <div class="small">Esc or P resumes. R restarts the run.</div>
+    <div class="small" id="pauseFoot">Esc or P resumes. R restarts the run.</div>
     <div class="credit">Toad Game by <a href="https://github.com/duffyjp" target="_blank" rel="noopener">duffyjp</a>
       &nbsp;·&nbsp; <a href="https://github.com/duffyjp/toad-game" target="_blank" rel="noopener">github.com/duffyjp/toad-game</a></div>
   </div>
@@ -231,7 +267,7 @@ const CONFIG = {
     pitchMin: -0.05, pitchMax: 1.2, lerp: 8, heightPad: 0.9, sway: 0.03
   },
   sun: { dir: [0.55, 0.62, 0.38], shadowSpan: 26, shadowMap: 2048 },
-  loop: { fixed: 1 / 60, maxFrameDelta: 0.05, maxSteps: 4 },
+  loop: { fixed: 1 / 60, maxFrameDelta: 0.25, maxSteps: 20 },
   storage: { best: 'toad-feast-best-v1' }
 };
 
@@ -1258,6 +1294,12 @@ const P = {
 };
 let state = 'start';
 const input = { f: 0, r: 0, mx: 0, my: 0, hop: false, flick: false, flickAim: null, leap: false };
+/* Two independent movement sources. The thumb-stick writes padMove, the gamepad writes
+   stickMove; stepToad prefers whichever is active (pad first). They used to share one pair
+   of fields guarded by a single "is anything moving?" latch, and that latch could be left
+   switched on with the values at zero — which silently swallowed all thumb-stick input. */
+const padMove = { x: 0, y: 0, on: false };
+const stickMove = { x: 0, y: 0, on: false };
 const keys = Object.create(null);
 
 function loadBest() { try { return parseInt(localStorage.getItem(C.storage.best) || '0', 10) || 0; } catch (e) { return 0; } }
@@ -1336,17 +1378,17 @@ addEventListener('wheel', (e) => {
 }, { passive: false });
 
 /* ---------- gamepad ---------- */
-const pad = { moveOn: false, prevA: false, prevB: false, prevX: false, prevRT: false, prevStart: false };
+const pad = { prevA: false, prevB: false, prevX: false, prevRT: false, prevStart: false };
 function pollPad() {
   if (!navigator.getGamepads) return;
   const pads = navigator.getGamepads();
   let gp = null;
   for (const g of pads) if (g) { gp = g; break; }
-  if (!gp) return;
+  if (!gp) { stickMove.on = false; stickMove.x = stickMove.y = 0; return; }
   const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
   const m = Math.hypot(ax, ay);
-  if (m > 0.22) { input.mx = ax; input.my = ay; pad.moveOn = true; }
-  else if (pad.moveOn && m < 0.15) { input.mx = input.my = 0; pad.moveOn = false; }
+  if (m > 0.22) { stickMove.x = ax; stickMove.y = ay; stickMove.on = true; }
+  else if (stickMove.on && m < 0.15) { stickMove.x = stickMove.y = 0; stickMove.on = false; }
   const b = (i) => !!(gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5));
   const a = b(0), bb = b(1), x = b(2), rt = (gp.buttons[7] && gp.buttons[7].value > 0.35) || b(7);
   const start = b(9);
@@ -1360,39 +1402,147 @@ function pollPad() {
   pad.prevA = a; pad.prevB = bb; pad.prevX = x; pad.prevRT = rt; pad.prevStart = start;
 }
 
-/* ---------- touch fallback ---------- */
+/* ---------- touch controls ----------
+   The old version registered touchmove on window with passive:true, so iOS treated a drag
+   inside the stick as a page gesture and swallowed it; it also assumed one finger at a time,
+   which breaks as soon as you steer and orbit together. Track each finger by identifier and
+   claim it on touchstart instead. */
 const IS_TOUCH = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
-if (IS_TOUCH) {
-  document.getElementById('touch').classList.add('on');
-  const stick = document.getElementById('stick'), nub = document.getElementById('nub');
-  let sid = null, ox = 0, oy = 0;
-  stick.addEventListener('touchstart', (e) => {
-    const t = e.changedTouches[0]; sid = t.identifier;
-    const r = stick.getBoundingClientRect(); ox = r.left + r.width / 2; oy = r.top + r.height / 2;
-    e.preventDefault();
-  }, { passive: false });
-  addEventListener('touchmove', (e) => {
-    for (const t of e.changedTouches) {
-      if (t.identifier !== sid) continue;
-      const dx = clamp((t.clientX - ox) / 52, -1, 1), dy = clamp((t.clientY - oy) / 52, -1, 1);
-      input.mx = dx; input.my = dy;
-      nub.style.transform = 'translate(' + (dx * 34) + 'px,' + (dy * 34) + 'px)';
-    }
-  }, { passive: true });
-  addEventListener('touchend', (e) => {
-    for (const t of e.changedTouches) {
-      if (t.identifier !== sid) continue;
-      sid = null; input.mx = input.my = 0; nub.style.transform = '';
-    }
-  });
-  const bind = (id, fn) => {
-    const el = document.getElementById(id);
-    el.addEventListener('touchstart', (ev) => { ev.preventDefault(); AUDIO.init(); fn(); }, { passive: false });
-  };
-  bind('bt1', () => { if (state === 'play') input.hop = true; });
-  bind('bt3', () => { if (state === 'play') input.leap = true; });
-  bind('bt2', () => { if (state === 'play') { input.flick = true; input.flickAim = null; } });
+let touchUIReady = false;
+function setupTouchUI() {
+  if (touchUIReady) return;
+  touchUIReady = true;
+  const g = (id) => document.getElementById(id);
+  g('touch').classList.add('on');
+  /* the keyboard binding list is dead weight on a phone, so swap in the pad layout instead.
+     This block runs before the shared el() helper exists further down, hence the local getter. */
+  g('keysDesktop').classList.add('off');
+  g('keysTouch').classList.remove('off');
+  g('ctaKey').textContent = '(or tap)';
+  g('startCta').firstChild.nodeValue = 'Tap anywhere to start ';
+  g('pauseFoot').textContent = 'Tap Resume to continue. The PAUSE button up top pauses the run.';
 }
+
+const STICK_R = 52;      // px of thumb travel that means full tilt
+const NUB_R = 34;        // px the nub is allowed to slide
+let stickOX = 0, stickOY = 0;
+/* orbit: a second finger dragging over the world turns the camera */
+let lookId = null, lookX = 0, lookY = 0;
+/* pinch: two fingers over the world zoom */
+let pinchIdB = null, pinchDist = 0;
+
+function stickCentre() {
+  const r = document.getElementById('stick').getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+function setStick(dx, dy) {
+  padMove.x = dx; padMove.y = dy; padMove.on = (dx !== 0 || dy !== 0);
+  document.getElementById('nub').style.transform = 'translate(' + (dx * NUB_R) + 'px,' + (dy * NUB_R) + 'px)';
+}
+function releaseStick() {
+  padMove.x = padMove.y = 0; padMove.on = false;
+  document.getElementById('nub').style.transform = '';
+}
+
+/* The pad is claimed by the first finger that lands on it, whichever event stream reports it.
+   iOS Safari is inconsistent about whether touch or pointer events arrive for a given gesture
+   (and can stop sending touchmove once it claims a drag), so both streams feed one shared
+   owner record. Whichever got there first keeps the stick until it lifts. */
+let stickOwner = null;          // 'touch' | 'pointer'
+let stickTouchId = null, stickPointerId = null;
+
+function overStickEl(target) { return !!(target && target.closest && target.closest('#stick')); }
+
+function claimStick(via, id, clientX, clientY) {
+  const c = stickCentre();
+  stickOwner = via;
+  if (via === 'touch') stickTouchId = id; else stickPointerId = id;
+  stickOX = c.x; stickOY = c.y;
+  setStick(clamp((clientX - stickOX) / STICK_R, -1, 1), clamp((clientY - stickOY) / STICK_R, -1, 1));
+}
+function moveStick(via, id, clientX, clientY) {
+  if (via !== stickOwner || id !== (via === 'touch' ? stickTouchId : stickPointerId)) return;
+  setStick(clamp((clientX - stickOX) / STICK_R, -1, 1), clamp((clientY - stickOY) / STICK_R, -1, 1));
+}
+function liftStick(via, id) {
+  if (via !== stickOwner || id !== (via === 'touch' ? stickTouchId : stickPointerId)) return;
+  stickOwner = null; stickTouchId = null; stickPointerId = null;
+  releaseStick();
+}
+
+addEventListener('pointerdown', (e) => {
+  if (!overStickEl(e.target) || stickOwner !== null) return;
+  claimStick('pointer', e.pointerId, e.clientX, e.clientY);
+});
+addEventListener('pointermove', (e) => moveStick('pointer', e.pointerId, e.clientX, e.clientY));
+addEventListener('pointerup', (e) => liftStick('pointer', e.pointerId));
+addEventListener('pointercancel', (e) => liftStick('pointer', e.pointerId));
+
+addEventListener('touchstart', (e) => {
+  for (const t of e.changedTouches) {
+    if (overStickEl(t.target)) {
+      if (stickOwner !== null) continue;       // one thumb per pad, whichever stream got there first
+      claimStick('touch', t.identifier, t.clientX, t.clientY);
+    } else if (state === 'play' && lookId === null) {
+      lookId = t.identifier; lookX = t.clientX; lookY = t.clientY;
+    }
+  }
+}, { passive: true });
+
+addEventListener('touchmove', (e) => {
+  const ids = Array.from(e.touches, (t) => t.identifier);
+  if (lookId !== null && !ids.includes(lookId)) lookId = null;
+  if (pinchIdB !== null && (!ids.includes(pinchIdB) || lookId === null)) pinchIdB = null;
+
+  /* two fingers on the world: pinch to zoom, and do not also orbit */
+  if (lookId !== null && pinchIdB === null) {
+    const other = Array.from(e.touches).find((t) => t.identifier !== lookId &&
+      !(t.target && t.target.closest && t.target.closest('#stick')));
+    if (other) { pinchIdB = other.identifier; pinchDist = Math.hypot(other.clientX - lookX, other.clientY - lookY); }
+  }
+  if (lookId !== null && pinchIdB !== null) {
+    const a = Array.from(e.touches).find((t) => t.identifier === lookId);
+    const b = Array.from(e.touches).find((t) => t.identifier === pinchIdB);
+    if (a && b) {
+      const d = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+      if (pinchDist > 0) dist = clamp(dist - (d - pinchDist) * 0.035, C.camera.minDist, C.camera.maxDist);
+      pinchDist = d;
+    }
+    if (e.cancelable) e.preventDefault();
+  }
+
+  for (const t of e.changedTouches) {
+    if (stickOwner === 'touch' && t.identifier === stickTouchId) {
+      moveStick('touch', t.identifier, t.clientX, t.clientY);
+    } else if (t.identifier === lookId) {
+      yaw -= (t.clientX - lookX) * 0.006;
+      pitch = clamp(pitch + (t.clientY - lookY) * 0.005, C.camera.pitchMin, C.camera.pitchMax);
+      lookX = t.clientX; lookY = t.clientY;
+    } else continue;
+    if (e.cancelable) e.preventDefault();
+  }
+}, { passive: false });
+
+function endTouches(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier === stickTouchId) liftStick('touch', t.identifier);
+    if (t.identifier === lookId) lookId = null;
+    if (t.identifier === pinchIdB) pinchIdB = null;
+  }
+}
+addEventListener('touchend', endTouches);
+addEventListener('touchcancel', (e) => {
+  endTouches(e);
+  if (stickOwner === 'touch') liftStick('touch', stickTouchId);
+  lookId = null; pinchIdB = null;
+});
+
+function bindTouch(id, fn) {
+  const b = document.getElementById(id);
+  b.addEventListener('touchstart', (ev) => { ev.preventDefault(); AUDIO.init(); fn(); }, { passive: false });
+  b.addEventListener('click', (ev) => { ev.stopPropagation(); AUDIO.init(); fn(); });
+}
+if (IS_TOUCH) setupTouchUI();
 
 /* ---------- terrain / water interaction for the toad ---------- */
 function groundAt(x, z) { return terrainH(x, z); }
@@ -1492,6 +1642,7 @@ const UI = {
   hintTimer: 0,
   setMute(m) { this.muteBtn.textContent = 'Mute: ' + (m ? 'on' : 'off'); },
   showHint() {
+    if (matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window) return;   // no keyboard banner on a phone
     this.hint.innerHTML = '<b>WASD</b> move &nbsp;·&nbsp; <b>Space</b> hop &nbsp;·&nbsp; <b>Shift</b> leap &nbsp;·&nbsp; ' +
       '<b>Click / E</b> tongue &nbsp;·&nbsp; <b>mouse</b> orbit &nbsp;·&nbsp; <b>scroll</b> zoom ' +
       '&nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>M</b> mute &nbsp;·&nbsp; <b>C</b> croak';
@@ -1550,6 +1701,16 @@ el('vol').addEventListener('input', (e) => { AUDIO.init(); AUDIO.setVol(e.target
 el('bestStart').textContent = P.best;
 /* the pause screen shows the same bindings, so the list is copied instead of duplicated in markup */
 el('pauseKeys').innerHTML = el('keysCard').innerHTML;
+if (IS_TOUCH) {
+  /* the pause card shows the same list, so hide whichever half does not apply here */
+  el('pauseKeys').querySelector('#keysDesktop').classList.add('off');
+  el('pauseKeys').querySelector('#keysTouch').classList.remove('off');
+}
+if (IS_TOUCH) setupTouchUI();   // phones get the on-screen pads and the touch binding list
+bindTouch('bt1', () => { if (state === 'play') input.hop = true; });
+bindTouch('bt3', () => { if (state === 'play') input.leap = true; });
+bindTouch('bt2', () => { if (state === 'play') { input.flick = true; input.flickAim = null; } });
+bindTouch('bt4', () => { if (state === 'play') pause(); else if (state === 'pause') resume(); });
 UI.setMute(false);
 
 function setState(s) {
@@ -1786,9 +1947,12 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
  * ============================================================ */
 const UP = new THREE.Vector3(0, 1, 0);
 function stepToad(dt) {
-  /* input vector, camera-relative */
-  let ix = input.mx, iz = input.my;
-  if (!pad.moveOn) {
+  /* input vector, camera-relative. The thumb-stick wins over the gamepad when both are live;
+     keyboard only applies when neither analog source is engaged. */
+  let ix, iz;
+  if (padMove.on) { ix = padMove.x; iz = padMove.y; }
+  else if (stickMove.on) { ix = stickMove.x; iz = stickMove.y; }
+  else {
     ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
     iz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
     if (ix || iz) { const l = Math.hypot(ix, iz); ix /= l; iz /= l; }
@@ -1926,8 +2090,13 @@ function frame(now) {
   const running = state === 'play' || state === 'dead';
   if (running) {
     acc += dtReal;
+    /* Catch-up has to cover the whole elapsed frame, not a fixed handful of steps. A hard cap
+       made the simulation run in slow motion on devices rendering below ~60fps: at 12 frames a
+       second the game only advanced a fifth as fast as real time. The ceiling is now derived
+       from the frame we actually got, with an absolute limit so a bad frame cannot stall us. */
+    const budget = Math.min(Math.ceil(dtReal / C.loop.fixed) + 1, C.loop.maxSteps);
     let steps = 0;
-    while (acc >= C.loop.fixed && steps < C.loop.maxSteps) {
+    while (acc >= C.loop.fixed && steps < budget) {
       acc -= C.loop.fixed; steps++;
       const dt = C.loop.fixed;
       uTime.value += dt;
@@ -1954,7 +2123,7 @@ function frame(now) {
       flyTick(dt);
       PART.step(dt);
     }
-    if (acc > C.loop.fixed * C.loop.maxSteps) acc = 0;
+    if (acc > C.loop.fixed * 2) acc = 0;      // drop a sub-step remainder rather than let it pile up
   } else {
     uTime.value += dtReal * 0.4;
     if (state !== 'pause') { flyTick(dtReal); PART.step(dtReal); }   // ambient life keeps moving on the menus
